@@ -1,3 +1,3 @@
-### Code and Data for "Partitioning Menu Items to Nudge Single-item Choice" ###
+### Code and Data for Tannenbaum, Fox, & Goldstein "Partitioning Menu Items to Nudge Single-item Choice" ###
 
-Folders correspond to Studies 1A, 1B, and 2 from the paper. Each folder contains: (1) a data file (`.csv` file); and (2) a STATA do-file that cleans the raw data and executes all analyses reported in the paper (`.do` file).
+Contains data and code for reproducing reported results. Folders correspond to all experiments reported in the paper. Each folder contains: (1) a "raw" and "cleaned" data file (`.csv` file); (2) a codebook for the cleaned data set (`.txt` file); (3) a STATA do-file that prepares/cleans the raw data file and executes all analyses reported in the paper (`.do` file); and (4) study materials (`.pdf` and `.qsf` files).
