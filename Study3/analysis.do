@@ -37,12 +37,12 @@ rename cookies cond4
 
 // converting variables to numeric
 // note: requires 'encoder' program from SSC
-encoder grouped, replace
-encoder order, replace
-encoder cond1, replace
-encoder cond2, replace
-encoder cond3, replace
-encoder cond4, replace
+encoder grouped, replace setzero
+encoder order, replace setzero
+encoder cond1, replace setzero
+encoder cond2, replace setzero
+encoder cond3, replace setzero
+encoder cond4, replace setzero
 
 // converting all response strings to lower case and removing dead spaces
 ds, has(type string) 
@@ -93,22 +93,22 @@ forvalues i = 1/4 {
 foreach var of varlist countries* entertainment* dessert* city* {
 	replace `var' = . if `var' == -99
 }
-gen infer1 = countries1 + countries2 + countries3 if grouped == 1 & cond1 == 2
-replace infer1 = countries2 + countries3 + countries4 if grouped == 2 & cond1 == 2
-replace infer1 = countries4 if grouped == 1 & cond1 == 1
-replace infer1 = countries1 if grouped == 2 & cond1 == 1
-gen infer2 = entertainment1 + entertainment2 + entertainment3 if grouped == 1 & cond2 == 2
-replace infer2 = entertainment2 + entertainment3 + entertainment4 if grouped == 2 & cond2 == 2
-replace infer2 = entertainment4 if grouped == 1 & cond2 == 1
-replace infer2 = entertainment1 if grouped == 2 & cond2 == 1
-gen infer3 = city1 + city2 + city3 if grouped == 1 & cond3 == 2
-replace infer3 = city2 + city3 + city4 if grouped == 2 & cond3 == 2
-replace infer3 = city4 if grouped == 1 & cond3 == 1
-replace infer3 = city1 if grouped == 2 & cond3 == 1
-gen infer4 = dessert1 + dessert2 + dessert3 if grouped == 1 & cond4 == 2
-replace infer4 = dessert2 + dessert3 + dessert4 if grouped == 2 & cond4 == 2
-replace infer4 = dessert4 if grouped == 1 & cond4 == 1
-replace infer4 = dessert1 if grouped == 2 & cond4 == 1
+gen infer1 = countries1 + countries2 + countries3 if grouped == 0 & cond1 == 1
+replace infer1 = countries2 + countries3 + countries4 if grouped == 1 & cond1 == 1
+replace infer1 = countries4 if grouped == 0 & cond1 == 0
+replace infer1 = countries1 if grouped == 1 & cond1 == 0
+gen infer2 = entertainment1 + entertainment2 + entertainment3 if grouped == 0 & cond2 == 1
+replace infer2 = entertainment2 + entertainment3 + entertainment4 if grouped == 1 & cond2 == 1
+replace infer2 = entertainment4 if grouped == 0 & cond2 == 0
+replace infer2 = entertainment1 if grouped == 1 & cond2 == 0
+gen infer3 = city1 + city2 + city3 if grouped == 0 & cond3 == 1
+replace infer3 = city2 + city3 + city4 if grouped == 1 & cond3 == 1
+replace infer3 = city4 if grouped == 0 & cond3 == 0
+replace infer3 = city1 if grouped == 1 & cond3 == 0
+gen infer4 = dessert1 + dessert2 + dessert3 if grouped == 0 & cond4 == 1
+replace infer4 = dessert2 + dessert3 + dessert4 if grouped == 1 & cond4 == 1
+replace infer4 = dessert4 if grouped == 0 & cond4 == 0
+replace infer4 = dessert1 if grouped == 1 & cond4 == 0
 
 // reshaping data
 gen id = _n
@@ -120,16 +120,13 @@ label var trial "choice trial"
 label define triall 1 "vacations" 2 "entertainment options" 3 "weekend cities" 4 "desert options"
 label val trial triall
 label var cond "menu partition manipulation"
-replace cond = cond - 1
 label define condl 0 "category A packed" 1 "category A unpacked"
 label val cond condl
 rename grouped position
-replace position = position - 1
 label var position "menu partition position"
 label define positionl 0 "packed category at bottom" 1 "packed category at top"
 label val position positionl
 label var order "order of choice/inference blocks"
-replace order = order - 1
 label define orderl 0 "choice block first" 1 "inference block first"
 label val order orderl
 label var dv "DV: choosing item from category A vs B"
@@ -205,8 +202,10 @@ collapse dv infer, by(trial cond)
 pwcorr dv infer, sig
 
 // Mediation: khb method bootstrapped
+// note: requires 'khb' program from SSC
+snapshot restore 1
 set seed 987654321
-bootstrap _b[Diff], reps(10000) nodots: khb logit dv cond || c.infer, vce(cluster id) //bootstrapped model
+bootstrap _b[Diff], reps(10000) cluster(id) nodots: khb logit dv cond || c.infer //bootstrapped model
 estat boot, bc percentile
 
 // Mediation: alternative model
@@ -214,5 +213,5 @@ snapshot restore 1
 khb regress infer cond || i.dv, summary vce(cluster id) // alternative model
 
 // Mediation: Looking at whether inferences were measured first or second
-khb logit dv cond || c.infer if order == 1, summary vce(cluster id) 
-khb logit dv cond || c.infer if order == 2, summary vce(cluster id)
+khb logit dv cond || c.infer if order == 0, summary vce(cluster id) 
+khb logit dv cond || c.infer if order == 1, summary vce(cluster id)

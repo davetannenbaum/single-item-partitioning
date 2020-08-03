@@ -91,18 +91,15 @@ label var trial "choice trial"
 label define triall 1 "vacations" 2 "entertainment options" 3 "weekend cities" 4 "desert options"
 label val trial triall
 label var cond "menu partition manipulation"
-encoder cond, replace
-replace cond = cond - 1
+encoder cond, replace setzero
 label define condl 0 "category A packed" 1 "category A unpacked"
 label val cond condl
 label var estimation "estimating popularity before/after viewing menu partition"
-encoder estimation, replace
-replace estimation = estimation - 1
+encoder estimation, replace setzero
 label define estimationl 0 "after" 1 "before", replace
 label val estimation estimationl
 rename grouped position
-encoder position, replace
-replace position = position - 1
+encoder position, replace setzero
 label var position "menu partition position"
 label define positionl 0 "packed category at bottom" 1 "packed category at top"
 label val position positionl
@@ -126,7 +123,7 @@ snapshot save
 snapshot restore 1
 collapse age, by(id gender)
 tab gender
-sum age
+sum age if age != 520
 
 ** Analysis
 ** -----------------------------------------------
@@ -147,13 +144,14 @@ margins estimation, dydx(cond)
 margins estimation, dydx(cond) pwcompare
 
 // Mediation: khb method bootstrapped
+// note: requires 'khb' program from SSC
 snapshot restore 1
 separate dv, by(estimation)
 separate infer, by(estimation)
 set seed 987654321
-bootstrap _b[Diff], reps(10000) nodots: khb logit dv0 cond || infer, vce(cluster id)
+bootstrap _b[Diff], reps(10000) cluster(id) nodots: khb logit dv0 cond || infer
 estat boot, bc percentile
-bootstrap _b[Diff], reps(10000) nodots: khb logit dv1 cond || infer, vce(cluster id)
+bootstrap _b[Diff], reps(10000) cluster(id) nodots: khb logit dv1 cond || infer
 estat boot, bc percentile
 
 // Moderated Mediation (Hayes, 2013 Model 8)
@@ -171,9 +169,9 @@ gen intx = cond * estimation
 tab trial, gen(trial)
 capture program drop _all
 program modmed, rclass
-  gsem (infer <- trial2-trial4 cond estimation intx) (dv <- trial2-trial4 cond estimation intx , family(binomial) link(logit)), vce(cluster id)
+  gsem (infer <- trial2-trial4 cond estimation intx) (dv <- trial2-trial4 cond estimation intx infer, family(binomial) link(logit))
   return scalar indirect = _b[infer:intx] * _b[dv:infer]
 end
 set seed 987654321
-bootstrap r(indirect), reps(10000) nodots: modmed
+bootstrap r(indirect), reps(10000) cluster(id) nodots: modmed
 estat boot, bc percentile
