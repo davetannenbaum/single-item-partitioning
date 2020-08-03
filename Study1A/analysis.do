@@ -46,6 +46,7 @@ quietly foreach v of varlist `r(varlist)' {
 
 // choice 1: animal vs environmental charities
 // recoding open responses to 0 = environmental charity, 1 = animal charity
+// note: requires 'encoder' program from SSC
 replace choice1 = "" if strpos(choice1, "based")
 replace choice1 = "" if inlist(choice1, "none")
 replace choice1 = "SPCA" if strpos(choice1, "prevention")
@@ -56,7 +57,7 @@ replace choice1 = "NRDC" if strpos(choice1, "natural")
 replace choice1 = "NRDC" if strpos(choice1, "nrdc")
 replace choice1 = "Env Defense Fund" if inlist(choice1, "environmental defense fund")
 replace choice1 = "Sierra Club" if inlist(choice1, "sierra club")
-rencode choice1, replace
+encoder choice1, replace
 recode choice1 (1 3 5 = 1 "animal based") (2 4 6 = 0 "environmental"), gen(dv1)
 
 // choice 2: sci-fi vs romantic comedy movies
@@ -72,7 +73,7 @@ replace choice2 = "2001" if strpos(choice2, "a space odyssey")
 replace choice2 = "ET" if strpos(choice2, "e.t")
 replace choice2 = "ET" if inlist(choice2, "et: the extra terrestrial", "et")
 replace choice2 = "Star Wars" if strpos(choice2, "star")
-rencode choice2, replace
+encoder choice2, replace
 recode choice2 (1 2 4 = 1 "science fiction") (3 5 6 = 0 "rom com"), gen(dv2)
 
 // choice 3: life science vs social science books
@@ -87,7 +88,7 @@ replace choice3 = "Outliers" if inlist(choice3, "ouliers")
 replace choice3 = "Wisdom of Crowds" if strpos(choice3, "crowds")
 replace choice3 = "Selfish Gene" if strpos(choice3, "selfish")
 replace choice3 = "Superfreakonomics" if strpos(choice3, "freak")
-rencode choice3, replace
+encoder choice3, replace
 recode choice3 (1 2 4 = 1 "life science") (3 5 6 = 0 "social science"), gen(dv3)
 
 // choice 4: world news vs popular science magazine subscriptions
@@ -101,7 +102,7 @@ replace choice4 = "Time" if strpos(choice4, "time")
 replace choice4 = "Newsweek" if strpos(choice4, "newsweek")
 replace choice4 = "New Scientist" if strpos(choice4, "scientist")
 replace choice4 = "Sci American" if strpos(choice4, "scientific")
-rencode choice4, replace
+encoder choice4, replace
 recode choice4 (3 5 6 = 1 "World News") (1 2 4 = 0 "Popular Science"), gen(dv4)
 
 // reshaping data from wide to long format
@@ -114,11 +115,11 @@ label var trial "choice trial"
 label define triall 1 "charities" 2 "movies" 3 "books" 4 "magazine subscriptions"
 label val trial triall
 label var cond "menu partition manipulation"
-rencode cond, replace
+encoder cond, replace
 replace cond = cond - 1
 label define condl 0 "category A packed" 1 "category A unpacked"
 label val cond condl
-rencode position, replace
+encoder position, replace
 replace position = position - 1
 label var position "menu partition position"
 label define positionl 0 "packed category at bottom" 1 "packed category at top"

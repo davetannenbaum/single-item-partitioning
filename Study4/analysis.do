@@ -53,7 +53,8 @@ quietly foreach v of varlist `r(varlist)' {
 
 // choice 1: vacations
 // recoding responses to 0 = asian countries, 1 = european countries
-rencode choice1, replace
+// note: requires 'encoder' program from SSC
+encoder choice1, replace
 recode choice1 (1 5 6 = 0 "asia") (2 3 4 = 1 "europe"), gen(dv1)
 
 // choice 2: entertainment options
@@ -61,12 +62,12 @@ recode choice1 (1 5 6 = 0 "asia") (2 3 4 = 1 "europe"), gen(dv1)
 replace choice2 = "mlb" if inlist(choice2, "mlb game")
 replace choice2 = "nfl" if inlist(choice2, "nfl game")
 replace choice2 = "nba" if inlist(choice2, "nba game")
-rencode choice2, replace
+encoder choice2, replace
 recode choice2 (2 5 6 = 0 "cultural event") (1 3 4 = 1 "sports"), gen(dv2)
 
 // choice 3: weekend city
 // recodings responses to 0 = east coast city, 1 = west coast city
-rencode choice3, replace
+encoder choice3, replace
 recode choice3 (1 2 6 = 0 "east coast") (3 4 5 = 1 "west coast"), gen(dv3)
 
 // choice 4: desert
@@ -77,7 +78,7 @@ replace choice4 = "oatmeal raisin" if inlist(choice4, "oatmeal raisin cookie")
 replace choice4 = "peanut butter" if inlist(choice4, "peanut butter cookie")
 replace choice4 = "strawberry ice cream" if inlist(choice4, "strawberry", "strawberry ice cream cone")
 replace choice4 = "vanilla ice cream" if inlist(choice4, "vanilla", "vanilla ice cream cone")
-rencode choice4, replace
+encoder choice4, replace
 recode choice4 (2 5 6 = 0 "ice cream") (1 3 4 = 1 "cookie"), gen(dv4)
 
 // reshaping data
@@ -90,17 +91,17 @@ label var trial "choice trial"
 label define triall 1 "vacations" 2 "entertainment options" 3 "weekend cities" 4 "desert options"
 label val trial triall
 label var cond "menu partition manipulation"
-rencode cond, replace
+encoder cond, replace
 replace cond = cond - 1
 label define condl 0 "category A packed" 1 "category A unpacked"
 label val cond condl
 label var estimation "estimating popularity before/after viewing menu partition"
-rencode estimation, replace
+encoder estimation, replace
 replace estimation = estimation - 1
 label define estimationl 0 "after" 1 "before", replace
 label val estimation estimationl
 rename grouped position
-rencode position, replace
+encoder position, replace
 replace position = position - 1
 label var position "menu partition position"
 label define positionl 0 "packed category at bottom" 1 "packed category at top"

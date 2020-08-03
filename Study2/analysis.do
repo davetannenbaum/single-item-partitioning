@@ -38,6 +38,7 @@ quietly foreach v of varlist `r(varlist)' {
 
 // choice of household chores
 // recoding open responses to 0 = outdoor chores, 1 = indoor chores
+// note: requires 'encoder' program from SSC
 replace chores = "" if strpos(chores, "indoor")
 replace chores = "" if strpos(chores, "outdoor")
 drop if inlist(chores, "1", "10000", "40000")
@@ -47,7 +48,7 @@ replace chores = "kitchen cleaning" if strpos(chores, "kitchen")
 replace chores = "lawn mowing" if strpos(chores, "mowing")
 replace chores = "weeding" if strpos(chores, "weed")
 replace chores = "vacuum" if strpos(chores, "vacuum")
-rencode chores, replace
+encoder chores, replace
 gen dv = 0 if inlist(chores,3,5)
 replace dv = 1 if inlist(chores,1,2,4)
 
@@ -56,12 +57,12 @@ gen id = _n
 
 // labeling variables and variable values
 label var id "unique participant id"
-rencode cond, replace
+encoder cond, replace
 label var cond "menu partition manipulation"
 replace cond = cond - 1
 label define condl 0 "indoor packed" 1 "indoor unpacked"
 label val cond condl
-rencode position, replace
+encoder position, replace
 replace position = position - 1
 label var position "menu partition position"
 label define positionl 0 "packed category at bottom" 1 "packed category at top"

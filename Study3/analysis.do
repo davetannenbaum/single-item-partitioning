@@ -36,12 +36,13 @@ rename westcoast cond3
 rename cookies cond4
 
 // converting variables to numeric
-rencode grouped, replace
-rencode order, replace
-rencode cond1, replace
-rencode cond2, replace
-rencode cond3, replace
-rencode cond4, replace
+// note: requires 'encoder' program from SSC
+encoder grouped, replace
+encoder order, replace
+encoder cond1, replace
+encoder cond2, replace
+encoder cond3, replace
+encoder cond4, replace
 
 // converting all response strings to lower case and removing dead spaces
 ds, has(type string) 
@@ -52,10 +53,9 @@ quietly foreach v of varlist `r(varlist)' {
 	replace `v' = ltrim(`v')
 }
 
-
 // choice 1: vacations
 // recoding responses to 0 = asian countries, 1 = european countries
-rencode choice1, replace
+encoder choice1, replace
 recode choice1 (1 5 = 0 "asia") (2 3 4 = 1 "europe"), gen(dv1)
 
 // choice 2: entertainment options
@@ -63,13 +63,13 @@ recode choice1 (1 5 = 0 "asia") (2 3 4 = 1 "europe"), gen(dv1)
 replace choice2 = "mlb" if inlist(choice2, "mlb game")
 replace choice2 = "nfl" if inlist(choice2, "nfl game")
 replace choice2 = "nba" if inlist(choice2, "nba game")
-rencode choice2, replace
+encoder choice2, replace
 recode choice2 (2 5 6 = 0 "cultural event") (1 3 4 = 1 "sports"), gen(dv2)
 
 // choice 3: weekend city
 // recodings responses to 0 = east coast city, 1 = west coast city
 replace choice3 = "washington" if inlist(choice3, "washington d.c.")
-rencode choice3, replace
+encoder choice3, replace
 recode choice3 (1 2 6 = 0 "east coast") (3 4 5 = 1 "west coast"), gen(dv3)
 
 // choice 4: desert
@@ -80,7 +80,7 @@ replace choice4 = "oatmeal raisin" if inlist(choice4, "oatmeal raisin cookie")
 replace choice4 = "peanut butter" if inlist(choice4, "peanut butter cookie")
 replace choice4 = "strawberry ice cream" if inlist(choice4, "strawberry", "strawberry ice cream cone")
 replace choice4 = "vanilla ice cream" if inlist(choice4, "vanilla", "vanilla ice cream cone")
-rencode choice4, replace
+encoder choice4, replace
 recode choice4 (2 5 6 = 0 "ice cream") (1 3 4 = 1 "cookie"), gen(dv4)
 
 // generating inference items
