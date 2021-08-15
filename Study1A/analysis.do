@@ -1,13 +1,13 @@
 ** ===============================================
-** Study 1
+** Study 1A
 ** ===============================================
 
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
 snapshot erase _all
-cd "~/GitHub/single-item-partitioning/Study1A/"
-import delimited data.csv, varnames(1) clear 
+version 16.1
+import delimited "https://www.dropbox.com/s/gzvmg7sb9pfemce/data.csv?dl=1", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -15,9 +15,7 @@ drop in 1
 // converting variables to numeric variables
 quietly destring, replace
 
-// removing observations with duplicate IP addresses
-// (IP addresses replaced with unique identifier to protect participant privacy)
-sort v8
+// removing rows of observations with duplicate IP addresses
 duplicates drop v6, force
 
 // naming variables
@@ -32,7 +30,6 @@ rename q19 choice3
 rename q24 choice4
 rename q26 gender
 rename q27 age
-rename q28 email
 rename q29 comments
 
 // converting all response strings to lower case and removing dead spaces
@@ -46,7 +43,6 @@ quietly foreach v of varlist `r(varlist)' {
 
 // choice 1: animal vs environmental charities
 // recoding open responses to 0 = environmental charity, 1 = animal charity
-// note: requires 'encoder' program from SSC
 replace choice1 = "" if strpos(choice1, "based")
 replace choice1 = "" if inlist(choice1, "none")
 replace choice1 = "SPCA" if strpos(choice1, "prevention")
@@ -119,10 +115,10 @@ encoder cond, replace
 replace cond = cond - 1
 label define condl 0 "category A packed" 1 "category A unpacked"
 label val cond condl
-encoder position, replace
-replace position = position - 1
+encoder position, replace setzero
+replace position = 1 - position
 label var position "menu partition position"
-label define positionl 0 "packed category at bottom" 1 "packed category at top"
+label define positionl 0 "packed category at top" 1 "packed category at bottom"
 label val position positionl
 label var dv "DV: choosing item from category A vs B"
 label define dvl 0 "Category B" 1 "Category A"
@@ -148,17 +144,13 @@ sum age
 ** Analysis
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond, c(mean dv) format(%9.3f) 		// table of results
-logit dv i.trial i.cond, cluster(id) 			// logit model
-margins, dydx(*) 								// average marginal effects
-
-forvalues i = 1/4 {								// same thing for each trial
+table trial cond, c(mean dv) format(%9.3f)
+logit dv i.trial i.cond, cluster(id)
+margins, dydx(cond)
+forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
-
-logit dv i.trial i.cond, vce(bootstrap, seed(90210) reps(1000) nodots) cluster(id) 	// bootstrapped standard errors
-logit dv i.trial i.cond, vce(jackknife) cluster(id)									// jackknife standard errors
 
 ** Position effects
 ** -----------------------------------------------
@@ -166,20 +158,30 @@ snapshot restore 1
 logit dv i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
 
-** Randomly select participants for payouts
-** -----------------------------------------------
-set seed 27945
-sample 1, count by(trial)
-
-** Analysis - Robustness Check
+** Robustness Check: recode missing observations to go against hypothesis
 ** -----------------------------------------------
 snapshot restore 1
 replace dv = 0 if cond == 1 & dv == .
 replace dv = 1 if cond == 0 & dv == .
+table trial cond, c(mean dv) format(%9.3f)
 logit dv i.trial i.cond, cluster(id)
 margins, dydx(*)
-
 forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
+
+** Robustness Check: OLS regression
+** -----------------------------------------------
+snapshot restore 1
+regress dv i.trial i.cond, cluster(id)
+margins, dydx(*)
+forvalues i = 1/4 {
+	regress dv i.cond if trial == `i', cluster(id)
+}
+regress dv i.trial i.cond##i.position, cluster(id)
+
+** Randomly select participants for payouts
+** -----------------------------------------------
+set seed 27945
+sample 1, count by(trial)
