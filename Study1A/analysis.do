@@ -7,7 +7,7 @@
 // loading raw data
 snapshot erase _all
 version 16.1
-import delimited "https://www.dropbox.com/s/gzvmg7sb9pfemce/data.csv?dl=1", varnames(1) clear
+import delimited "https://git.io/JRh4M", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -15,7 +15,12 @@ drop in 1
 // converting variables to numeric variables
 quietly destring, replace
 
+// remove unfinished responses and preview responses
+drop if v10 == 0
+drop if v7 != 0
+
 // removing rows of observations with duplicate IP addresses
+sort v8, stable
 duplicates drop v6, force
 
 // naming variables
@@ -165,7 +170,7 @@ replace dv = 0 if cond == 1 & dv == .
 replace dv = 1 if cond == 0 & dv == .
 table trial cond, c(mean dv) format(%9.3f)
 logit dv i.trial i.cond, cluster(id)
-margins, dydx(*)
+margins, dydx(cond)
 forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)

@@ -1,5 +1,5 @@
 ** ===============================================
-** Study 5 (moderation)
+** Study 5
 ** ===============================================
 
 ** Cleanup
@@ -7,7 +7,7 @@
 // loading raw data
 snapshot erase _all
 version 16.1
-import delimited "https://www.dropbox.com/s/wqrfc8hdpb4ooey/data.csv?dl=1", varnames(1) clear bindquote(strict)
+import delimited "https://git.io/JRjsC", varnames(1) clear bindquote(strict)
 
 // dropping extra rows of variable labels
 drop in 1/2
@@ -15,11 +15,12 @@ drop in 1/2
 // converting variables to numeric variables
 quietly destring, replace
 
-// removing incomplete survey responses
-drop if status == 1
+// remove unfinished responses and preview responses
 drop if finished == 0
+drop if status != 0
 
 // drop duplicate IP address
+sort v8, stable
 duplicates drop ipaddress, force
 
 // renaming and cleaning
@@ -152,13 +153,20 @@ label drop cookies
 label drop dv4
 replace cond = (cond == 2)
 
+// recoding and labeling group position variable
+rename groupedcategory position
+replace position = (position == 1)
+label var position "menu partition position"
+label define positionl 0 "packed category at top" 1 "packed category at bottom"
+label val position positionl
+
 // labeling trials
 label define triall 1 "Vacations" 2 "Entertainment" 3 "Weekend trip" 4 "Deserts"
 label val trial triall
 
 // pruning data set 
-keep id trial dv cond infer order groupedcategory gender age nsi isi
-order id trial dv cond infer order groupedcategory gender age nsi isi
+keep id trial dv cond infer order position gender age nsi isi
+order id trial dv cond infer order position gender age nsi isi
 snapshot save
 
 ** Demographics
@@ -189,13 +197,13 @@ forvalues i = 1/4 {
 	margins, dydx(*)
 }
 
-** Does grouped position moderate results?
+** Position effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.trial i.cond##i.groupedcategory, cluster(id)
-margins groupedcategory, dydx(cond)
-regress infer i.trial i.cond##i.groupedcategory, cluster(id)
-margins groupedcategory, dydx(cond)
+logit dv i.trial i.cond##i.position, cluster(id)
+margins position, dydx(cond)
+regress infer i.trial i.cond##i.position, cluster(id)
+margins position, dydx(cond)
 
 
 ** Correlation between inferences and choices
@@ -214,14 +222,6 @@ snapshot restore 1
 statsby corr=r(rho), by(trial) clear nodots: corr dv infer
 sum corr
 
-// Group-level correlation using only data from first block
-snapshot restore 1
-replace infer = . if order == 1
-replace infer = infer * .01
-replace dv = . if order == 2
-collapse dv infer, by(trial cond)
-pwcorr dv infer, sig
-
 ** Does block order moderate results?
 ** -----------------------------------------------
 snapshot restore 1
@@ -229,7 +229,6 @@ logit dv i.trial i.cond##i.order, cluster(id)
 margins order, dydx(cond)
 regress infer i.trial i.cond##i.order, cluster(id)
 margins order, dydx(cond)
-
 
 ** Restricting analysis to first block
 ** -----------------------------------------------
@@ -242,8 +241,8 @@ forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
-logit dv i.trial i.cond##i.groupedcategory, cluster(id)
-margins groupedcategory, dydx(cond)
+logit dv i.trial i.cond##i.position, cluster(id)
+margins position, dydx(cond)
 
 snapshot restore 1
 keep if order == 2
@@ -253,16 +252,16 @@ forvalues i = 1/4 {
 	quietly regress infer i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
-regress infer i.trial i.cond##i.groupedcategory, cluster(id)
-margins groupedcategory, dydx(cond)
+regress infer i.trial i.cond##i.position, cluster(id)
+margins position, dydx(cond)
 
-** Mediation
+** Mediation (KHB method)
 ** -----------------------------------------------
-// khb method
 snapshot restore 1
 khb logit dv cond || c.infer, summary vce(cluster id) concomitant(i.trial) verbose
 
-// khb method - bootstrapped
+** Bootstrapped mediation (KHB method)
+** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
 capture program drop bootm
@@ -275,18 +274,109 @@ end
 bootstrap r(total) r(direct) r(indirect), cluster(id) reps(10000) nodots: bootm
 estat boot, bc percentile
 
-// Looking at whether inferences were measured first or second
+** Bootstrapped mediation by block ordering
+** -----------------------------------------------
 snapshot restore 1
 khb logit dv cond || c.infer if order == 1, summary vce(cluster id) concomitant(i.trial)
 khb logit dv cond || c.infer if order == 2, summary vce(cluster id) concomitant(i.trial)
 
-// Mediation: potential outcomes approach
+** Mediation (potential outcomes method)
+** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
 tab trial, gen(t)
 medeff (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) vce(cluster id) sims(10000)
-medsens (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) sims(10000) graph
+
+** Sensitivity analysis (potential outcomes method)
+** -----------------------------------------------
+snapshot restore 1
+set seed 987654321
+tab trial, gen(t)
+medsens (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) sims(10000)
+twoway ///
+	rarea _med_updelta0 _med_lodelta0 _med_rho, color(gs12) lwidth(none) || ///
+	line _med_delta0 _med_rho, lcolor(black) lwidth(medthin) || ///
+	scatteri -.25 0 .88 0, recast(line) lcolor(black) lwidth(medthin) || ///
+	scatteri 0 -1 0 1, recast(line) lcolor(black) lwidth(medthin) || ///
+	scatteri .11778991 -1 .11778991 1, recast(line) lcolor(black) lwidth(medthin) lpattern(dash) ///
+	ytitle("Average Mediation Effect") ///
+	xtitle("Sensitivity parameter: {&rho}") ///
+	xlabel(-1(.5)1, nogrid) ///
+	plotr(m(zero)) ///
+	scheme(s1mono) ///
+	legend(off)
 graph twoway rarea _med_updelta0 _med_lodelta0 _med_rho, bcolor(gs14) || line _med_delta0 _med_rho, lcolor(black) ytitle("ACME") title("ACME({&rho})") xtitle("Sensitivity parameter: {&rho}") legend(off) scheme(sj)
+
+** Moderation/Subgroup Analysis
+** -----------------------------------------------
+snapshot restore 1
+replace infer = infer * .01
+
+regress dv i.trial i.cond##c.nsi, cluster(id)
+regress dv i.trial i.cond##c.isi, cluster(id)
+regress infer i.trial i.cond##c.nsi, cluster(id)
+regress infer i.trial i.cond##c.isi, cluster(id)
+regress dv i.trial i.cond c.infer##c.nsi, cluster(id)
+regress dv i.trial i.cond c.infer##c.isi, cluster(id)
+
+logit dv i.trial i.cond##c.nsi, cluster(id)
+logit dv i.trial i.cond##c.isi, cluster(id)
+regress infer i.trial i.cond##c.nsi, cluster(id)
+regress infer i.trial i.cond##c.isi, cluster(id)
+logit dv i.trial i.cond c.infer##c.nsi, cluster(id)
+logit dv i.trial i.cond c.infer##c.isi, cluster(id)
+
+
+** Robustness check: removing participants who had difficulty registering a preference
+** -----------------------------------------------
+snapshot restore 1
+replace dv = 0 if cond == 1 & dv == .
+replace dv = 1 if cond == 0 & dv == .
+
+table trial cond, c(mean dv) format(%9.3f)
+logit dv i.trial i.cond, cluster(id)
+margins, dydx(cond)
+forvalues i = 1/4 {
+	quietly logit dv i.cond if trial == `i', cluster(id)
+	margins, dydx(*)
+}
+set seed 987654321
+capture program drop bootm
+program bootm, rclass
+  logit dv i.trial c.infer i.cond
+  predict xb, xb
+  regress xb i.trial i.cond
+  local total = _b[1.cond]
+  regress xb i.trial c.infer i.cond
+  local direct = _b[1.cond]
+  return scalar total = `total'
+  return scalar direct = `direct'
+  return scalar indirect = `total' - `direct'
+  drop xb
+end
+bootstrap r(total) r(direct) r(indirect), cluster(id) reps(10000) nodots: bootm
+estat boot
+
+replace infer = infer * .01
+regress dv i.trial i.cond##c.nsi, cluster(id)
+regress dv i.trial i.cond##c.isi, cluster(id)
+regress infer i.trial i.cond##c.nsi, cluster(id)
+regress infer i.trial i.cond##c.isi, cluster(id)
+regress dv i.trial i.cond c.infer##c.nsi, cluster(id)
+regress dv i.trial i.cond c.infer##c.isi, cluster(id)
+
+logit dv i.trial i.cond##c.nsi, cluster(id)
+logit dv i.trial i.cond##c.isi, cluster(id)
+regress infer i.trial i.cond##c.nsi, cluster(id)
+regress infer i.trial i.cond##c.isi, cluster(id)
+logit dv i.trial i.cond c.infer##c.nsi, cluster(id)
+logit dv i.trial i.cond c.infer##c.isi, cluster(id)
+
+
+
+
+
+*** Leftovers ***
 
 ** Moderation/Subgroup Analysis
 ** -----------------------------------------------
@@ -321,94 +411,6 @@ esttab n1 n2 n3 n4 n5 n6 using table6.tex, ///
 	star(+ 0.10 * 0.05 ** 0.0101 *** 0.001) ///
 	keep(1.cond nsi isi infer 1.cond#c.nsi 1.cond#c.isi c.infer#c.nsi c.infer#c.isi _cons) ///
 	coeflabels(1.cond "Partition" 1.cond#c.nsi "Partition # NSI" 1.cond#c.isi "Partition # ISI")
-
-
-// Plots
-** -----------------------------------------------
-snapshot restore 1
-logit dv i.trial i.cond##c.sni, cluster(id)
-margins cond, at(sni = (1(1)7))
-marginsplot, ///
-	recast(line) ///
-	recastci(rarea) ///
-	plot1opts(lcolor(orange) lwidth(medium)) ///
-	ci1opt(color(orange%70) lwidth(none)) ///
-	plot2opts(lcolor(red) lwidth(medium)) ///
-	ci2opt(color(red%70) lwidth(none)) ///
-	graphregion(color(white))
-
-snapshot restore 1
-logit dv i.trial i.cond##c.sii, cluster(id)
-margins cond, at(sii = (1(1)7))
-marginsplot, ///
-	recast(line) ///
-	recastci(rarea) ///
-	plot1opts(lcolor(orange) lwidth(medium)) ///
-	ci1opt(color(orange%70) lwidth(none)) ///
-	plot2opts(lcolor(red) lwidth(medium)) ///
-	ci2opt(color(red%70) lwidth(none)) ///
-	graphregion(color(white))
-
-snapshot restore 1
-regress infer i.trial i.cond##c.sni, cluster(id)
-margins cond, at(sni = (1(1)7))
-marginsplot, ///
-	recast(line) ///
-	recastci(rarea) ///
-	plot1opts(lcolor(orange) lwidth(medium)) ///
-	ci1opt(color(orange%70) lwidth(none)) ///
-	plot2opts(lcolor(red) lwidth(medium)) ///
-	ci2opt(color(red%70) lwidth(none)) ///
-	graphregion(color(white))
-
-snapshot restore 1
-regress infer i.trial i.cond##c.sii, cluster(id)
-margins cond, at(sii = (1(1)7))
-marginsplot, ///
-	recast(line) ///
-	recastci(rarea) ///
-	plot1opts(lcolor(orange) lwidth(medium)) ///
-	ci1opt(color(orange%70) lwidth(none)) ///
-	plot2opts(lcolor(red) lwidth(medium)) ///
-	ci2opt(color(red%70) lwidth(none)) ///
-	graphregion(color(white))
-
-
-
-** Normative Social Influence on Beliefs
-snapshot restore 1
-regress infer i.trial i.cond##c.snsi, cluster(id)
-margins, dydx(cond) at(snsi = (1 4 7))
-margins cond, dydx(snsi) 
-
-** Normative Social Influence on Decision Weights
-snapshot restore 1
-logit dv i.trial i.cond c.infer##c.snsi, cluster(id)
-margins, dydx(infer) at(snsi = (1 4 7))
-
-// Informational Social Influence
-snapshot restore 1
-logit dv i.trial i.cond##c.sisi, cluster(id)
-margins cond, at(sisi = (1(1)7))
-marginsplot, ///
-	recast(line) ///
-	recastci(rarea) ///
-	plot1opts(lcolor(orange) lwidth(medium)) ///
-	ci1opt(color(orange%70) lwidth(none)) ///
-	plot2opts(lcolor(red) lwidth(medium)) ///
-	ci2opt(color(red%70) lwidth(none)) ///
-	graphregion(color(white))
-
-** Informational Social Influence on Beliefs
-snapshot restore 1
-regress infer i.trial i.cond##c.sisi, cluster(id)
-margins, dydx(cond) at(sisi = (1 4 7))
-
-** Informational Social Influence on Decision Weights
-snapshot restore 1
-logit dv i.trial i.cond c.infer##c.sisi, cluster(id)
-margins, dydx(infer) at(sisi = (1 4 7))
-
 
 ** Moderated Mediation
 ** -----------------------------------------------
@@ -465,10 +467,6 @@ gsem (infer <- trial2-trial4 cond estimation intx) (dv <- trial2-trial4 cond est
 nlcom (_b[infer:cond]+0*_b[infer:intx]) * _b[dv:infer]
 nlcom (_b[infer:cond]+1*_b[infer:intx]) * _b[dv:infer]
 nlcom _b[infer:intx] * _b[dv:infer]
-
-
-
-*** Leftovers ***
 
 snapshot restore 1
 sum snsi

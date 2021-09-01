@@ -7,7 +7,7 @@
 // loading raw data
 snapshot erase _all
 version 16.1
-import delimited "https://www.dropbox.com/s/rj4pfiuaqwyuha4/data.csv?dl=1", varnames(1) clear
+import delimited "https://git.io/JRhwW", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -15,8 +15,12 @@ drop in 1
 // converting variables to numeric variables
 quietly destring, replace
 
-// drop duplicate IP address
-sort v8
+// remove unfinished responses and preview responses
+drop if v10 == 0
+drop if v7 != 0
+
+// removing rows of observations with duplicate IP addresses
+sort v8, stable
 duplicates drop v6, force
 
 // renaming and cleaning
@@ -72,6 +76,8 @@ recode choice4 (1 5 6 = 0 "asia") (2 3 4 = 1 "europe"), gen(dv4)
 // reshaping data
 gen id = _n
 reshape long dv cond infer, i(id) j(trial)
+
+// coding and labeling variables
 encoder cond, replace
 replace cond = cond - 1
 label define condl 0 "packed" 1 "unpacked", replace
@@ -80,9 +86,9 @@ encoder estimation, replace
 replace estimation = estimation - 1
 label define estimationl 0 "after" 1 "before", replace
 label val estimation estimationl
-encoder groupedcategory, replace setzero
+encoder groupedcategory, replace
 rename groupedcategory position
-replace position = 1 - position
+replace position = (position == 1)
 label var position "menu partition position"
 label define positionl 0 "packed category at top" 1 "packed category at bottom"
 label val position positionl
@@ -104,14 +110,10 @@ collapse age, by(id gender)
 tab gender
 sum age if age != 520
 
-** Analysis
+** Analysis - Preferences
 ** -----------------------------------------------
-// Preferences
 snapshot restore 1
 table trial cond estimation, c(mean dv) format(%9.3f)
-
-// Basic effect
-snapshot restore 1
 logit dv i.trial i.cond, cluster(id) nolog
 margins, dydx(cond)
 forvalues i = 1/4 {
@@ -119,64 +121,62 @@ forvalues i = 1/4 {
 	margins, dydx(*)
 }
 
-// Positioning Effects
+** Position effects - Preferences
+** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.cond##i.position, cluster(id) nolog
 margins position, dydx(cond)
 
-// Interaction between timing of inferences and partitioning
+** Interaction between timing of inferences and choice
+** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.estimation##i.cond, cluster(id) nolog
 margins estimation, dydx(cond)
-margins estimation, dydx(cond) pwcompare(effects)
-logit dv i.trial i.estimation##i.cond##i.position, cluster(id) nolog
-bysort position: logit dv i.trial i.estimation##i.cond, cluster(id) nolog
 
-// Looking at interaction for each trial
-snapshot restore 1
 forvalues i = 1/4 {
-	quietly logit dv i.estimation##i.cond if trial == `i', robust nolog
-	margins estimation, dydx(cond)
-	margins estimation, dydx(cond) pwcompare(effects)
+	quietly logit dv i.cond if trial == `i' & estimation == 0, cluster(id)
+	margins, dydx(*)
+}
+forvalues i = 1/4 {
+	quietly logit dv i.cond if trial == `i' & estimation == 1, cluster(id)
+	margins, dydx(*)
 }
 
-// Inferences
+** Interaction between timing of inferences and judgments
+** -----------------------------------------------
 snapshot restore 1
 regress infer i.trial i.estimation##i.cond, cluster(id)
 margins estimation, dydx(cond)
-margins estimation, dydx(cond) pwcompare(effects)
-regress infer i.trial i.estimation##i.cond##i.position, cluster(id)
-bysort position: regress infer i.trial i.estimation##i.cond, cluster(id)
 
-// Looking at interaction for each trial
-snapshot restore 1
-forvalues i = 1/4 {
-	quietly regress infer i.estimation##i.cond if trial == `i', robust
-	margins estimation, dydx(cond)
-	margins estimation, dydx(cond) pwcompare(effects)
-}
-
-// Mediation: KHB method (note: requires 'khb' program from SSC)
+** Mediation (KHB method)
+** -----------------------------------------------
 snapshot restore 1
 separate dv, by(estimation)
 separate infer, by(estimation)
 khb logit dv0 cond || infer0, cluster(id) concomitant(i.trial)
 khb logit dv1 cond || infer1, cluster(id) concomitant(i.trial)
 
-// Bootstrapped KHB method
+** Bootstrapped mediation (KHB method)
+** -----------------------------------------------
 snapshot restore 1
 separate dv, by(estimation)
 separate infer, by(estimation)
 set seed 987654321
 capture program drop bootm
 program bootm, rclass
-  khb logit dv0 cond || c.infer0, concomitant(i.trial)
-  return scalar total0 = el(e(b),1,1)
-  return scalar direct0 = el(e(b),1,2)
-  return scalar indirect0 = el(e(b),1,3)
+  logit dv0 i.trial c.infer0 i.cond
+  predict xb, xb
+  regress xb i.trial i.cond
+  local total0 = _b[1.cond]
+  regress xb i.trial c.infer0 i.cond
+  local direct0 = _b[1.cond]
+  return scalar total0 = `total0'
+  return scalar direct0 = `direct0'
+  return scalar indirect0 = `total0' - `direct0'
+  drop xb
 end
 bootstrap r(total0) r(direct0) r(indirect0), cluster(id) reps(10000) nodots: bootm
-estat boot, bc percentile
+estat boot
 
 snapshot restore 1
 separate dv, by(estimation)
@@ -184,55 +184,45 @@ separate infer, by(estimation)
 set seed 987654321
 capture program drop bootm
 program bootm, rclass
-  khb logit dv1 cond || c.infer1, concomitant(i.trial)
-  return scalar total1 = el(e(b),1,1)
-  return scalar direct1 = el(e(b),1,2)
-  return scalar indirect1 = el(e(b),1,3)
+  logit dv1 i.trial c.infer1 i.cond
+  predict xb, xb
+  regress xb i.trial i.cond
+  local total1 = _b[1.cond]
+  regress xb i.trial c.infer1 i.cond
+  local direct1 = _b[1.cond]
+  return scalar total1 = `total1'
+  return scalar direct1 = `direct1'
+  return scalar indirect1 = `total1' - `direct1'
+  drop xb
 end
 bootstrap r(total1) r(direct1) r(indirect1), cluster(id) reps(10000) nodots: bootm
-estat boot, bc percentile
-
-// Moderated Mediation (Hayes, 2013 Model 8)
-snapshot restore 1
-gen intx = cond * estimation
-tab trial, gen(trial)
-gsem (infer <- trial2-trial4 cond estimation intx) (dv <- trial2-trial4 cond estimation intx infer, logit), vce(cluster id)
-nlcom (_b[infer:cond]+(0)*_b[infer:intx])*_b[dv:infer]
-nlcom (_b[infer:cond]+(1)*_b[infer:intx])*_b[dv:infer] 
-nlcom (_b[infer:cond]+(1)*_b[infer:intx])*_b[dv:infer] - (_b[infer:cond]+(0)*_b[infer:intx])*_b[dv:infer]
-
-// Bootstrapped Moderated Mediation (Hayes, 2013 Model 8)
-snapshot restore 1
-gen intx = cond * estimation
-tab trial, gen(trial)
-capture program drop _all
-program modmed, rclass
-  gsem (infer <- trial2-trial4 cond estimation intx) (dv <- trial2-trial4 cond estimation intx infer, logit)
-  return scalar indirect = _b[infer:intx] * _b[dv:infer]
-end
-set seed 987654321
-bootstrap r(indirect), reps(10000) cluster(id) nodots: modmed
-estat boot, bc percentile
-
-// Mediation: Potential Outcomes method
+estat boot
+ 
+** Mediation (potential outcomes method)
+** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
 tab trial, gen(t)
 separate dv, by(estimation)
 separate infer, by(estimation)
-
 medeff (regress infer0 t2 t3 t4 cond) (probit dv0 t2 t3 t4 infer0 cond), mediate(infer0) treat(cond) vce(cluster id) sims(10000)
 medeff (regress infer1 t2 t3 t4 cond) (probit dv1 t2 t3 t4 infer1 cond), mediate(infer1) treat(cond) sims(10000)
 
-// Sensitivity Analysis
+** Sensitivity analysis (potential outcomes method)
+** -----------------------------------------------
+snapshot restore 1
+set seed 987654321
+tab trial, gen(t)
+separate dv, by(estimation)
+separate infer, by(estimation)
 set seed 1234
-medsens (regress infer0 t2 t3 t4 cond) (probit dv0 t2 t3 t4 infer0 cond), mediate(infer0) treat(cond) sims(10000) graph
+medsens (regress infer0 t2 t3 t4 cond) (probit dv0 t2 t3 t4 infer0 cond), mediate(infer0) treat(cond) sims(10000)
 twoway ///
 	rarea _med_updelta0 _med_lodelta0 _med_rho, color(gs12) lwidth(none) || ///
 	line _med_delta0 _med_rho, lcolor(black) lwidth(medthin) || ///
 	scatteri -.2 0 .3 0, recast(line) lcolor(black) lwidth(medthin) || ///
 	scatteri 0 -1 0 1, recast(line) lcolor(black) lwidth(medthin) || ///
-	scatteri .0124926 -1 .0124926 1, recast(line) lcolor(black) lwidth(medthin) lpattern(dash) ///
+	scatteri .01320377 -1 .01320377 1, recast(line) lcolor(black) lwidth(medthin) lpattern(dash) ///
 	ytitle("Average Mediation Effect") ///
 	xtitle("Sensitivity parameter: {&rho}") ///
 	xlabel(-1(.5)1, nogrid) ///
@@ -240,8 +230,22 @@ twoway ///
 	scheme(s1mono) ///
 	legend(off)
 
+** Differences in Indirect Effects
+** -----------------------------------------------
+snapshot restore 1
+separate dv, by(estimation)
+separate infer, by(estimation)
+eststo m1: quietly regress infer0 i.trial i.cond
+eststo m2: quietly logit dv0 i.trial c.infer0 i.cond
+eststo m3: quietly regress infer1 i.trial i.cond
+eststo m4: quietly logit dv1 i.trial c.infer1 i.cond
+suest m1 m2 m3 m4, vce(cluster id)
+nlcom _b[m1_mean:1.cond] * _b[m2_dv0:infer0]
+nlcom _b[m3_mean:1.cond] * _b[m4_dv1:infer1]
+nlcom (_b[m1_mean:1.cond] * _b[m2_dv0:infer0]) - (_b[m3_mean:1.cond] * _b[m4_dv1:infer1])
 
-// Robustness Check: recode missing observations to go against hypothesis
+** Robustness check: removing participants who had difficulty registering a preference
+** -----------------------------------------------
 snapshot restore 1
 xtab id if filter == 1, i(id)
 replace dv = 0 if cond == 1 & filter == 1
@@ -254,14 +258,15 @@ forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
-
 logit dv i.trial i.estimation##i.cond, cluster(id) nolog
 margins estimation, dydx(cond)
-margins estimation, dydx(cond) pwcompare(effects)
 forvalues i = 1/4 {
-	quietly logit dv i.estimation##i.cond if trial == `i', robust nolog
-	margins estimation, dydx(cond)
-	margins estimation, dydx(cond) pwcompare(effects)
+	quietly logit dv i.cond if trial == `i' & estimation == 0, cluster(id)
+	margins, dydx(*)
+}
+forvalues i = 1/4 {
+	quietly logit dv i.cond if trial == `i' & estimation == 1, cluster(id)
+	margins, dydx(*)
 }
 
 snapshot restore 1
@@ -272,13 +277,19 @@ separate infer, by(estimation)
 set seed 987654321
 capture program drop bootm
 program bootm, rclass
-  khb logit dv0 cond || c.infer0, concomitant(i.trial)
-  return scalar total0 = el(e(b),1,1)
-  return scalar direct0 = el(e(b),1,2)
-  return scalar indirect0 = el(e(b),1,3)
+  logit dv0 i.trial c.infer0 i.cond
+  predict xb, xb
+  regress xb i.trial i.cond
+  local total0 = _b[1.cond]
+  regress xb i.trial c.infer0 i.cond
+  local direct0 = _b[1.cond]
+  return scalar total0 = `total0'
+  return scalar direct0 = `direct0'
+  return scalar indirect0 = `total0' - `direct0'
+  drop xb
 end
 bootstrap r(total0) r(direct0) r(indirect0), cluster(id) reps(10000) nodots: bootm
-estat boot, bc percentile
+estat boot
 
 snapshot restore 1
 replace dv = 0 if cond == 1 & filter == 1
@@ -288,10 +299,16 @@ separate infer, by(estimation)
 set seed 987654321
 capture program drop bootm
 program bootm, rclass
-  khb logit dv1 cond || c.infer1, concomitant(i.trial)
-  return scalar total1 = el(e(b),1,1)
-  return scalar direct1 = el(e(b),1,2)
-  return scalar indirect1 = el(e(b),1,3)
+  logit dv1 i.trial c.infer1 i.cond
+  predict xb, xb
+  regress xb i.trial i.cond
+  local total1 = _b[1.cond]
+  regress xb i.trial c.infer1 i.cond
+  local direct1 = _b[1.cond]
+  return scalar total1 = `total1'
+  return scalar direct1 = `direct1'
+  return scalar indirect1 = `total1' - `direct1'
+  drop xb
 end
 bootstrap r(total1) r(direct1) r(indirect1), cluster(id) reps(10000) nodots: bootm
-estat boot, bc percentile
+estat boot

@@ -7,7 +7,7 @@
 // loading raw data
 snapshot erase _all
 version 16.1
-import delimited "https://www.dropbox.com/s/3nfhciw5nf3n4h1/data.csv?dl=1", varnames(1) clear
+import delimited "https://git.io/JRhR7", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -15,7 +15,12 @@ drop in 1
 // converting variables to numeric variables
 quietly destring, replace
 
-// drop duplicate IP address
+// remove unfinished responses and preview responses
+drop if v10 == 0
+drop if v7 != 0
+
+// removing rows of observations with duplicate IP addresses
+sort v8, stable
 duplicates drop v6, force
 
 // renaming and cleaning
@@ -50,12 +55,13 @@ replace chores = "rain gutters" if strpos(chores,"rain")
 replace chores = "laundry" if strpos(chores,"laundry")
 replace chores = "kitchen cleaning" if strpos(chores, "kitchen")
 replace chores = "lawn mowing" if strpos(chores, "lawn")
+replace chores = "lawn mowing" if strpos(chores, "mowing")
 replace chores = "weeding" if strpos(chores, "weeds")
 replace chores = "vacuum" if strpos(chores, "vacuum")
 encoder chores, replace
-gen indoor_chores = 0 if inlist(chores,3,4,6)
-replace indoor_chores = 1 if inlist(chores,1,2,5)
-rename indoor_chores dv
+
+gen dv = 0 if inlist(chores,3,5)
+replace dv = 1 if inlist(chores,1,2,4)
 label define dvl 0 "outdoor chores" 1 "household chores"
 label val dv dvl
 
@@ -74,6 +80,10 @@ sum age
 ** -----------------------------------------------
 snapshot restore 1
 prtest dv, by(cond)
+
+** Position effects
+** -----------------------------------------------
+snapshot restore 1
 logit dv i.cond##i.position
 margins position, dydx(cond)
 

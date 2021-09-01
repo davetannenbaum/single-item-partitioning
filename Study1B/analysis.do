@@ -7,7 +7,7 @@
 // loading raw data
 snapshot erase _all
 version 16.1
-import delimited "https://www.dropbox.com/s/rhd3qjxi6msyu7k/data.csv?dl=1", varnames(1) clear 
+import delimited "https://git.io/JRhBx", varnames(1) clear 
 
 // dropping extra row of variable labels
 drop in 1
@@ -15,7 +15,12 @@ drop in 1
 // converting variables to numeric variables
 quietly destring, replace
 
-// drop duplicate IP address
+// remove unfinished responses and preview responses
+drop if v10 == 0
+drop if v7 != 0
+
+// removing rows of observations with duplicate IP addresses
+sort v8, stable
 duplicates drop v6, force
 
 // renaming variables
@@ -76,7 +81,12 @@ sum age
 ** -----------------------------------------------
 snapshot restore 1
 prtest dv, by(cond)
+
+** Position effects
+** -----------------------------------------------
+snapshot restore 1
 logit dv i.position##i.cond
+margins position, dydx(cond)
 
 ** Robustness Check: OLS regression
 ** -----------------------------------------------
