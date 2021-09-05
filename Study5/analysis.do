@@ -153,16 +153,31 @@ label drop cookies
 label drop dv4
 replace cond = (cond == 2)
 
-// recoding and labeling group position variable
+// recoding and labeling variables
 rename groupedcategory position
 replace position = (position == 1)
-label var position "menu partition position"
 label define positionl 0 "packed category at top" 1 "packed category at bottom"
 label val position positionl
-
-// labeling trials
 label define triall 1 "Vacations" 2 "Entertainment" 3 "Weekend trip" 4 "Deserts"
 label val trial triall
+replace order = order - 1
+label define orderl 0 "choice block first" 1 "inference block first"
+label val order orderl
+label define condl 0 "category A packed" 1 "category A unpacked"
+label val cond condl
+label define dvl 0 "Category B" 1 "Category A"
+label val dv dvl
+label var id "unique participant id"
+label var trial "choice trial"
+label var dv "DV: choosing item from category A vs B"
+label var cond "menu partition manipulation"
+label var infer "predicted choice share for category A/B items"
+label var order "order of choice/inference blocks"
+label var position "menu partition position"
+label var gender "participant gender"
+label var age "participant age (in years)"
+label var nsi "susceptibility to normative social influence score"
+label var isi "susceptibility to informational social influence score"
 
 // pruning data set 
 keep id trial dv cond infer order position gender age nsi isi
