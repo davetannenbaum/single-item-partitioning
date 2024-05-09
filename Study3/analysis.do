@@ -5,9 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
+// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 16.1
-import delimited "https://git.io/JRhzY", varnames(1) clear
+import delimited "https://shorturl.at/mEJN0", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -59,6 +60,7 @@ replace choice4 = "strawberry ice cream" if inlist(choice4, "strawberry ice crea
 replace choice4 = "vanilla ice cream" if inlist(choice4,"vanilla","vanilla ice cream cone")
 
 // generating new variables
+// note: uses the "encoder" package, to install type: ssc install encoder
 forvalues i = 1/4 {
 	gen countries`i' = q28_`i'  if q28_`i' != .
 	replace countries`i' = q29_`i'  if q29_`i' != .
@@ -146,6 +148,8 @@ label val trial triall
 // pruning data set 
 keep id trial dv cond infer order position gender age filter
 order id trial dv cond infer order position gender age filter
+
+// saving snapshot of data
 snapshot save
 
 ** Demographics
@@ -159,44 +163,45 @@ sum age
 ** -----------------------------------------------
 snapshot restore 1
 table trial cond, c(mean dv) format(%9.3f)
-logit dv i.trial i.cond, cluster(id)
+logit dv i.trial i.cond, cluster(id) // avg marginal effect
 margins, dydx(cond)
 forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
 
-** Analysis - Inferences
+** Analysis - Judgments
 ** -----------------------------------------------
 snapshot restore 1
 table trial cond, c(mean infer) format(%9.1f)
-regress infer i.trial i.cond, cluster(id)
+regress infer i.trial i.cond, cluster(id) // avg marginal effect
 margins, dydx(cond)
 forvalues i = 1/4 {
 	quietly regress infer i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
 
-** Position effects
+** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.trial i.cond##i.position, cluster(id) nolog
-margins position, dydx(cond)
-regress infer i.trial i.cond##i.position, cluster(id)
-margins position, dydx(cond)
+logit dv i.trial i.cond##i.position, cluster(id) nolog // interaction between partition and listing position
+margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond) pwcompare(effects) // difference in avg marginal effects
+regress infer i.trial i.cond##i.position, cluster(id) // interaction between partition and listing position
+margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
 
-** Correlation between inferences and choices
+** Correlation between judgments and choices
 ** -----------------------------------------------
 // Grand Correlation
 snapshot restore 1
 pwcorr dv infer, sig
 
-// Average across-items, within-subjects correlation
+// Avg correlation across items, within participants
 snapshot restore 1
 statsby corr=r(rho), by(id) clear nodots: corr dv infer
 sum corr
 
-// Average across-subject, within-items correlation
+// Avg correlation within items, across participants
 snapshot restore 1
 statsby corr=r(rho), by(trial) clear nodots: corr dv infer
 sum corr
@@ -205,9 +210,12 @@ sum corr
 ** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.cond##i.order, cluster(id)
+margins order, dydx(cond)
+margins order, dydx(cond) pwcompare(effects)
 regress infer i.trial i.cond##i.order, cluster(id)
+margins order, dydx(cond)
 
-** Restricting analysis to first block
+** Restricting analysis to first block (choices)
 ** -----------------------------------------------
 snapshot restore 1
 keep if order == 1
@@ -221,6 +229,8 @@ forvalues i = 1/4 {
 logit dv i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
 
+** Restricting analysis to first block (judgments)
+** -----------------------------------------------
 snapshot restore 1
 keep if order == 2
 table trial cond, c(mean infer) format(%9.3f)
@@ -234,6 +244,7 @@ regress infer i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
 
 ** Mediation (KHB method)
+** note: uses the "khb" package, to install type: ssc install khb
 ** -----------------------------------------------
 snapshot restore 1
 khb logit dv cond || infer, cluster(id) concomitant(i.trial)
@@ -299,6 +310,7 @@ bootstrap r(total) r(direct) r(indirect), cluster(id) reps(10000) nodots: bootm
 estat boot
 
 ** Mediation (potential outcomes method)
+** note: uses the "mediation" package, to install type: ssc install mediation
 ** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
@@ -306,6 +318,8 @@ tab trial, gen(t)
 medeff (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) vce(cluster id) sims(10000)
 
 ** Sensitivity analysis (potential outcomes method)
+** note: the command 'mendsens' is installed as part of the "mediation" package, 
+** but also requires the "moremata" package, to install type: ssc install moremata
 ** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
@@ -325,6 +339,7 @@ twoway ///
 	legend(off)
 
 ** Robustness check: removing participants who had difficulty registering a preference
+** note: uses the "xtab" package, to install type: ssc install xtab
 ** -----------------------------------------------
 snapshot restore 1
 xtab id if filter == 1, i(id)

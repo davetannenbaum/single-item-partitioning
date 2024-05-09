@@ -5,9 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
+// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 16.1
-import delimited "https://git.io/JRh4M", varnames(1) clear
+import delimited "https://shorturl.at/rHJPY", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -48,6 +49,7 @@ quietly foreach v of varlist `r(varlist)' {
 
 // choice 1: animal vs environmental charities
 // recoding open responses to 0 = environmental charity, 1 = animal charity
+// note: uses the "encoder" package, to install type: ssc install encoder
 replace choice1 = "" if strpos(choice1, "based")
 replace choice1 = "" if inlist(choice1, "none")
 replace choice1 = "SPCA" if strpos(choice1, "prevention")
@@ -137,6 +139,8 @@ label var age "participant age (in years)"
 // removing crud
 keep id trial cond position dv gender age
 order id trial cond position dv gender age
+
+// saving snapshot of data
 snapshot save
 
 ** Demographics
@@ -146,22 +150,23 @@ collapse age, by(id gender)
 tab gender
 sum age
 
-** Analysis
+** Main analysis
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond, c(mean dv) format(%9.3f)
+table trial cond, c(mean dv) format(%9.3f) // table of results
 logit dv i.trial i.cond, cluster(id)
-margins, dydx(cond)
+margins, dydx(cond) // avg marginal effect
 forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	margins, dydx(*) // avg marginal effect for each domain
 }
 
-** Position effects
+** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.trial i.cond##i.position, cluster(id)
-margins position, dydx(cond)
+logit dv i.trial i.cond##i.position, cluster(id) // interaction between partition and listing position
+margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond) pwcompare(effects) // difference in avg marginal effects
 
 ** Robustness Check: recode missing observations to go against hypothesis
 ** -----------------------------------------------
@@ -175,18 +180,3 @@ forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
-
-** Robustness Check: OLS regression
-** -----------------------------------------------
-snapshot restore 1
-regress dv i.trial i.cond, cluster(id)
-margins, dydx(*)
-forvalues i = 1/4 {
-	regress dv i.cond if trial == `i', cluster(id)
-}
-regress dv i.trial i.cond##i.position, cluster(id)
-
-** Randomly select participants for payouts
-** -----------------------------------------------
-set seed 27945
-sample 1, count by(trial)

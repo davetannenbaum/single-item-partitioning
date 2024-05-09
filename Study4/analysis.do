@@ -5,9 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
+// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 16.1
-import delimited "https://git.io/JRhwW", varnames(1) clear
+import delimited "https://shorturl.at/aV034", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -64,6 +65,7 @@ replace choice2 = "strawberry ice cream" if inlist(choice2, "strawberry ice crea
 replace choice2 = "vanilla ice cream" if inlist(choice2,"vanilla","vanilla ice cream cone")
 
 // creating dependent variables
+// note: uses the "encoder" package, to install type: ssc install encoder
 encoder choice1, replace
 encoder choice2, replace
 encoder choice3, replace
@@ -101,6 +103,8 @@ rename trial2 trial
 // pruning data set
 keep id trial cond position estimation dv infer gender age comments filter
 order id trial cond position estimation dv infer gender age comments filter
+
+// saving snapshot of data
 snapshot save
 
 ** Demographics
@@ -121,17 +125,19 @@ forvalues i = 1/4 {
 	margins, dydx(*)
 }
 
-** Position effects - Preferences
+** Positioning effects - Preferences
 ** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.cond##i.position, cluster(id) nolog
 margins position, dydx(cond)
+margins position, dydx(cond) pwcompare(effects)
 
 ** Interaction between timing of inferences and choice
 ** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.estimation##i.cond, cluster(id) nolog
 margins estimation, dydx(cond)
+margins estimation, dydx(cond) pwcompare(effects)
 
 forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i' & estimation == 0, cluster(id)
@@ -149,6 +155,7 @@ regress infer i.trial i.estimation##i.cond, cluster(id)
 margins estimation, dydx(cond)
 
 ** Mediation (KHB method)
+** note: uses the "khb" package, to install type: ssc install khb
 ** -----------------------------------------------
 snapshot restore 1
 separate dv, by(estimation)
@@ -199,6 +206,7 @@ bootstrap r(total1) r(direct1) r(indirect1), cluster(id) reps(10000) nodots: boo
 estat boot
  
 ** Mediation (potential outcomes method)
+** note: uses the "mediation" package, to install type: ssc install mediation
 ** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
@@ -209,6 +217,8 @@ medeff (regress infer0 t2 t3 t4 cond) (probit dv0 t2 t3 t4 infer0 cond), mediate
 medeff (regress infer1 t2 t3 t4 cond) (probit dv1 t2 t3 t4 infer1 cond), mediate(infer1) treat(cond) sims(10000)
 
 ** Sensitivity analysis (potential outcomes method)
+** note: the command 'mendsens' is installed as part of the "mediation" package, 
+** but also requires the "moremata" package, to install type: ssc install moremata
 ** -----------------------------------------------
 snapshot restore 1
 set seed 987654321
@@ -230,21 +240,8 @@ twoway ///
 	scheme(s1mono) ///
 	legend(off)
 
-** Differences in Indirect Effects
-** -----------------------------------------------
-snapshot restore 1
-separate dv, by(estimation)
-separate infer, by(estimation)
-eststo m1: quietly regress infer0 i.trial i.cond
-eststo m2: quietly logit dv0 i.trial c.infer0 i.cond
-eststo m3: quietly regress infer1 i.trial i.cond
-eststo m4: quietly logit dv1 i.trial c.infer1 i.cond
-suest m1 m2 m3 m4, vce(cluster id)
-nlcom _b[m1_mean:1.cond] * _b[m2_dv0:infer0]
-nlcom _b[m3_mean:1.cond] * _b[m4_dv1:infer1]
-nlcom (_b[m1_mean:1.cond] * _b[m2_dv0:infer0]) - (_b[m3_mean:1.cond] * _b[m4_dv1:infer1])
-
 ** Robustness check: removing participants who had difficulty registering a preference
+** note: uses the "xtab" package, to install type: ssc install xtab
 ** -----------------------------------------------
 snapshot restore 1
 xtab id if filter == 1, i(id)
@@ -258,8 +255,10 @@ forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i', cluster(id)
 	margins, dydx(*)
 }
+
 logit dv i.trial i.estimation##i.cond, cluster(id) nolog
 margins estimation, dydx(cond)
+margins estimation, dydx(cond) pwcompare(effects)
 forvalues i = 1/4 {
 	quietly logit dv i.cond if trial == `i' & estimation == 0, cluster(id)
 	margins, dydx(*)

@@ -5,9 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
+// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 16.1
-import delimited "https://git.io/JRhR7", varnames(1) clear
+import delimited "https://shorturl.at/flqK3", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -24,6 +25,7 @@ sort v8, stable
 duplicates drop v6, force
 
 // renaming and cleaning
+// note: uses the "encoder" package, to install type: ssc install encoder
 rename q8 chores
 rename q10 gender
 replace gender = gender - 1
@@ -68,6 +70,8 @@ label val dv dvl
 // removing crud
 keep cond chores dv position gender age
 order cond chores dv position gender age
+
+// saving snapshot of data
 snapshot save
 
 ** Demographics
@@ -76,16 +80,17 @@ snapshot restore 1
 tab gender
 sum age
 
-** Analysis
+** Main analysis
 ** -----------------------------------------------
 snapshot restore 1
 prtest dv, by(cond)
 
-** Position effects
+** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.cond##i.position
-margins position, dydx(cond)
+logit dv i.cond##i.position, robust // interaction between partition and listing position 
+margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond) pwcompare(effects) // difference in avg marginal effects
 
 ** Robustness Check: recode missing observations to go against hypothesis
 ** -----------------------------------------------
@@ -93,11 +98,6 @@ snapshot restore 1
 replace dv = 0 if cond == 1 & dv == .
 replace dv = 1 if cond == 0 & dv == .
 prtest dv, by(cond)
-logit dv i.cond##i.position
-
-** Robustness Check: OLS regression
-** -----------------------------------------------
-snapshot restore 1
-ttest dv, by(cond)
-regress dv i.cond##i.position
+logit dv i.cond##i.position, robust
 margins position, dydx(cond)
+margins position, dydx(cond) pwcompare(effects)

@@ -5,9 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
+// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 16.1
-import delimited "https://git.io/JRhBx", varnames(1) clear 
+import delimited "https://shorturl.at/cxIR3", varnames(1) clear 
 
 // dropping extra row of variable labels
 drop in 1
@@ -69,6 +70,8 @@ label var age "participant age (in years)"
 // removing crud
 keep id cond position dv gender age comments
 order id cond position dv gender age comments
+
+// saving snapshot of data
 snapshot save
 
 ** Demographics
@@ -77,28 +80,14 @@ snapshot restore 1
 tab gender
 sum age
 
-** Analysis
+** Main analysis
 ** -----------------------------------------------
 snapshot restore 1
 prtest dv, by(cond)
 
-** Position effects
+** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.position##i.cond
-margins position, dydx(cond)
-
-** Robustness Check: OLS regression
-** -----------------------------------------------
-snapshot restore 1
-ttest dv, by(cond)
-regress dv i.position##i.cond
-
-** Payoffs
-** -----------------------------------------------
-snapshot restore 1
-set seed 987654321
-gen random = runiform()
-sort random
-keep in 1/5
-gen draw = int((100-0+1)*runiform())
+logit dv i.position##i.cond, robust // interaction between partition and listing position
+margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond) pwcompare(effects) // difference in avg marginal effects

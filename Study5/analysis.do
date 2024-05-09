@@ -5,9 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
+// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 16.1
-import delimited "https://git.io/JRjsC", varnames(1) clear bindquote(strict)
+import delimited "https://shorturl.at/irGZ9", varnames(1) clear bindquote(strict)
 
 // dropping extra rows of variable labels
 drop in 1/2
@@ -20,7 +21,7 @@ drop if finished == 0
 drop if status != 0
 
 // drop duplicate IP address
-sort v8, stable
+sort startdate, stable
 duplicates drop ipaddress, force
 
 // renaming and cleaning
@@ -78,6 +79,7 @@ replace choice4 = "vanilla ice cream" if inlist(choice4,"ice cream cone, vanilla
 replace choice4 = "" if ~inlist(choice4,"chocolate chip","oatmeal raisin","peanut butter","mint chip ice cream","strawberry ice cream","vanilla ice cream")
 
 // generating new inference variables
+// note: uses the "encoder" package, to install type: ssc install encoder
 forvalues i = 1/4 {
 	generate countries`i' = q27_`i'  if q27_`i' != .
 	replace countries`i' = q29_`i'  if q29_`i' != .
@@ -153,35 +155,22 @@ label drop cookies
 label drop dv4
 replace cond = (cond == 2)
 
-// recoding and labeling variables
+// recoding and labeling group position variable
 rename groupedcategory position
 replace position = (position == 1)
+label var position "menu partition position"
 label define positionl 0 "packed category at top" 1 "packed category at bottom"
 label val position positionl
+
+// labeling trials
 label define triall 1 "Vacations" 2 "Entertainment" 3 "Weekend trip" 4 "Deserts"
 label val trial triall
-replace order = order - 1
-label define orderl 0 "choice block first" 1 "inference block first"
-label val order orderl
-label define condl 0 "category A packed" 1 "category A unpacked"
-label val cond condl
-label define dvl 0 "Category B" 1 "Category A"
-label val dv dvl
-label var id "unique participant id"
-label var trial "choice trial"
-label var dv "DV: choosing item from category A vs B"
-label var cond "menu partition manipulation"
-label var infer "predicted choice share for category A/B items"
-label var order "order of choice/inference blocks"
-label var position "menu partition position"
-label var gender "participant gender"
-label var age "participant age (in years)"
-label var nsi "susceptibility to normative social influence score"
-label var isi "susceptibility to informational social influence score"
 
 // pruning data set 
 keep id trial dv cond infer order position gender age nsi isi
 order id trial dv cond infer order position gender age nsi isi
+
+// saving snapshot of data
 snapshot save
 
 ** Demographics
@@ -212,14 +201,14 @@ forvalues i = 1/4 {
 	margins, dydx(*)
 }
 
-** Position effects
+** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
+margins position, dydx(cond) pwcompare(effects)
 regress infer i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
-
 
 ** Correlation between inferences and choices
 ** -----------------------------------------------
@@ -242,6 +231,7 @@ sum corr
 snapshot restore 1
 logit dv i.trial i.cond##i.order, cluster(id)
 margins order, dydx(cond)
+margins order, dydx(cond) pwcompare(effects)
 regress infer i.trial i.cond##i.order, cluster(id)
 margins order, dydx(cond)
 
@@ -258,6 +248,7 @@ forvalues i = 1/4 {
 }
 logit dv i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
+margins position, dydx(cond) pwcompare(effects)
 
 snapshot restore 1
 keep if order == 2
@@ -271,6 +262,7 @@ regress infer i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
 
 ** Mediation (KHB method)
+** note: uses the "khb" package, to install type: ssc install khb
 ** -----------------------------------------------
 snapshot restore 1
 khb logit dv cond || c.infer, summary vce(cluster id) concomitant(i.trial) verbose
@@ -295,33 +287,6 @@ snapshot restore 1
 khb logit dv cond || c.infer if order == 1, summary vce(cluster id) concomitant(i.trial)
 khb logit dv cond || c.infer if order == 2, summary vce(cluster id) concomitant(i.trial)
 
-** Mediation (potential outcomes method)
-** -----------------------------------------------
-snapshot restore 1
-set seed 987654321
-tab trial, gen(t)
-medeff (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) vce(cluster id) sims(10000)
-
-** Sensitivity analysis (potential outcomes method)
-** -----------------------------------------------
-snapshot restore 1
-set seed 987654321
-tab trial, gen(t)
-medsens (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) sims(10000)
-twoway ///
-	rarea _med_updelta0 _med_lodelta0 _med_rho, color(gs12) lwidth(none) || ///
-	line _med_delta0 _med_rho, lcolor(black) lwidth(medthin) || ///
-	scatteri -.25 0 .88 0, recast(line) lcolor(black) lwidth(medthin) || ///
-	scatteri 0 -1 0 1, recast(line) lcolor(black) lwidth(medthin) || ///
-	scatteri .11778991 -1 .11778991 1, recast(line) lcolor(black) lwidth(medthin) lpattern(dash) ///
-	ytitle("Average Mediation Effect") ///
-	xtitle("Sensitivity parameter: {&rho}") ///
-	xlabel(-1(.5)1, nogrid) ///
-	plotr(m(zero)) ///
-	scheme(s1mono) ///
-	legend(off)
-graph twoway rarea _med_updelta0 _med_lodelta0 _med_rho, bcolor(gs14) || line _med_delta0 _med_rho, lcolor(black) ytitle("ACME") title("ACME({&rho})") xtitle("Sensitivity parameter: {&rho}") legend(off) scheme(sj)
-
 ** Moderation/Subgroup Analysis
 ** -----------------------------------------------
 snapshot restore 1
@@ -341,10 +306,41 @@ regress infer i.trial i.cond##c.isi, cluster(id)
 logit dv i.trial i.cond c.infer##c.nsi, cluster(id)
 logit dv i.trial i.cond c.infer##c.isi, cluster(id)
 
-
-** Robustness check: removing participants who had difficulty registering a preference
+** Mediation (potential outcomes method)
+** note: uses the "mediation" package, to install type: ssc install mediation
 ** -----------------------------------------------
 snapshot restore 1
+set seed 987654321
+tab trial, gen(t)
+medeff (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) vce(cluster id) sims(10000)
+
+** Sensitivity analysis (potential outcomes method)
+** note: the command 'mendsens' is installed as part of the "mediation" package, 
+** but also requires the "moremata" package, to install type: ssc install moremata
+** -----------------------------------------------
+snapshot restore 1
+set seed 987654321
+tab trial, gen(t)
+medsens (regress infer t2 t3 t4 cond) (probit dv t2 t3 t4 infer cond), mediate(infer) treat(cond) sims(10000)
+twoway ///
+	rarea _med_updelta0 _med_lodelta0 _med_rho, color(gs12) lwidth(none) || ///
+	line _med_delta0 _med_rho, lcolor(black) lwidth(medthin) || ///
+	scatteri -.25 0 .88 0, recast(line) lcolor(black) lwidth(medthin) || ///
+	scatteri 0 -1 0 1, recast(line) lcolor(black) lwidth(medthin) || ///
+	scatteri .11778991 -1 .11778991 1, recast(line) lcolor(black) lwidth(medthin) lpattern(dash) ///
+	ytitle("Average Mediation Effect") ///
+	xtitle("Sensitivity parameter: {&rho}") ///
+	xlabel(-1(.5)1, nogrid) ///
+	plotr(m(zero)) ///
+	scheme(s1mono) ///
+	legend(off)
+graph twoway rarea _med_updelta0 _med_lodelta0 _med_rho, bcolor(gs14) || line _med_delta0 _med_rho, lcolor(black) ytitle("ACME") title("ACME({&rho})") xtitle("Sensitivity parameter: {&rho}") legend(off) scheme(sj)
+
+** Robustness check: removing participants who had difficulty registering a preference
+** note: uses the "xtab" package, to install type: ssc install xtab
+** -----------------------------------------------
+snapshot restore 1
+xtab id if filter == 1, i(id)
 replace dv = 0 if cond == 1 & dv == .
 replace dv = 1 if cond == 0 & dv == .
 
@@ -386,142 +382,3 @@ regress infer i.trial i.cond##c.nsi, cluster(id)
 regress infer i.trial i.cond##c.isi, cluster(id)
 logit dv i.trial i.cond c.infer##c.nsi, cluster(id)
 logit dv i.trial i.cond c.infer##c.isi, cluster(id)
-
-
-
-
-
-*** Leftovers ***
-
-** Moderation/Subgroup Analysis
-** -----------------------------------------------
-snapshot restore 1
-label var cond "Partition"
-label var nsi "NSI"
-label var isi "ISI"
-label var infer "Item Popularity"
-label var dv "Choice"
-
-eststo m1: logit dv i.trial i.cond##c.nsi, cluster(id)
-eststo m2: logit dv i.trial i.cond##c.isi, cluster(id)
-eststo m3: regress infer i.trial i.cond##c.nsi, cluster(id)
-eststo m4: regress infer i.trial i.cond##c.isi, cluster(id)
-eststo m5: logit dv i.trial i.cond c.infer##c.nsi, cluster(id)
-eststo m6: logit dv i.trial i.cond c.infer##c.isi, cluster(id)
-
-replace infer = infer * .01
-eststo n1: regress dv i.trial i.cond##c.nsi, cluster(id)
-eststo n2: regress dv i.trial i.cond##c.isi, cluster(id)
-eststo n3: regress infer i.trial i.cond##c.nsi, cluster(id)
-eststo n4: regress infer i.trial i.cond##c.isi, cluster(id)
-eststo n5: regress dv i.trial i.cond c.infer##c.nsi, cluster(id)
-eststo n6: regress dv i.trial i.cond c.infer##c.isi, cluster(id)
-
-esttab n1 n2 n3 n4 n5 n6 using table6.tex, /// 
-	b(%9.3f) ///
-	se(%9.3f) ///
-	r2 ///
-	label ///
-	align(S) ///
-	star(+ 0.10 * 0.05 ** 0.0101 *** 0.001) ///
-	keep(1.cond nsi isi infer 1.cond#c.nsi 1.cond#c.isi c.infer#c.nsi c.infer#c.isi _cons) ///
-	coeflabels(1.cond "Partition" 1.cond#c.nsi "Partition # NSI" 1.cond#c.isi "Partition # ISI")
-
-** Moderated Mediation
-** -----------------------------------------------
-// Test: NSI moderates partition -> inference pathway
-snapshot restore 1
-quietly summarize snsi
-replace snsi = snsi - r(mean)
-regress infer i.trial i.cond##c.snsi
-estimates store m1
-logit dv i.trial c.infer i.cond##c.snsi
-estimates store m2
-suest m1 m2, vce(cluster id)
-nlcom _b[m1_mean:1.cond#c.snsi] * _b[m2_dv:infer]
-
-// Test: ISI moderates partition -> inference pathway
-snapshot restore 1
-regress infer i.trial i.cond##c.sisi
-estimates store m1
-logit dv i.trial c.infer i.cond##c.sisi
-estimates store m2
-suest m1 m2, vce(cluster id)
-nlcom _b[m1_mean:1.cond#c.sisi] * _b[m2_dv:infer]
-
-// Test: NSI moderates inference -> dv pathway
-snapshot restore 1
-regress infer i.trial i.cond
-estimates store m1
-logit dv i.trial i.cond c.infer##c.snsi
-estimates store m2
-suest m1 m2, vce(cluster id)
-nlcom _b[m1_mean:1.cond] * _b[m2_dv:c.infer#c.snsi]
-
-// Test: ISI moderates inference -> dv pathway
-snapshot restore 1
-regress infer i.trial i.cond
-estimates store m1
-logit dv i.trial i.cond c.infer##c.sisi
-estimates store m2
-suest m1 m2, vce(cluster id)
-nlcom _b[m1_mean:1.cond] * _b[m2_dv:c.infer#c.sisi]
-
-// Combined Test:
-// NSI moderates partition -> inference pathway
-// ISI moderates inference -> dv pathway
-snapshot restore 1
-regress infer i.trial i.cond##c.snsi
-estimates store m1
-logit dv i.cond##c.snsi c.infer##c.sisi
-estimates store m2
-suest m1 m2, vce(cluster id)
-nlcom (_b[m1_mean:1.cond#c.snsi])* (_b[m2_dv:c.infer] + _b[m2_dv:c.infer#c.sisi]) // not sure if this is right
-
-gsem (infer <- trial2-trial4 cond estimation intx) (dv <- trial2-trial4 cond estimation intx infer, family(binomial) link(logit)), vce(cluster id)
-nlcom (_b[infer:cond]+0*_b[infer:intx]) * _b[dv:infer]
-nlcom (_b[infer:cond]+1*_b[infer:intx]) * _b[dv:infer]
-nlcom _b[infer:intx] * _b[dv:infer]
-
-snapshot restore 1
-sum snsi
-replace snsi = snsi - r(mean)
-sum sisi
-replace sisi = sisi - r(mean)
-gen intx1 = cond * snsi
-gen intx2 = infer * snsi
-gen intx3 = cond * sisi
-gen intx4 = infer * sisi
-tab trial, gen(trial)
-
-// NSI influences decision weights
-quietly gsem (infer <- trial2-trial4 cond) (dv <- trial2-trial4 cond infer snsi intx2, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// NSI influences beliefs
-quietly gsem (infer <- trial2-trial4 cond snsi intx1) (dv <- trial2-trial4 cond infer, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// NSI influences both
-quietly gsem (infer <- trial2-trial4 cond sisi intx3) (dv <- trial2-trial4 cond infer sisi intx4, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// ISI influences decision weights
-quietly gsem (infer <- trial2-trial4 cond) (dv <- trial2-trial4 cond infer sisi intx4, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// ISI influences beliefs
-quietly gsem (infer <- trial2-trial4 cond sisi intx3) (dv <- trial2-trial4 cond infer, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// ISI influences both
-quietly gsem (infer <- trial2-trial4 cond sisi intx3) (dv <- trial2-trial4 cond infer sisi intx4, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// Combined version: NSI influences beliefs, ISI influences decision weights
-gsem (infer <- trial2-trial4 cond snsi intx1) (dv <- trial2-trial4 cond snsi intx1 infer sisi intx4, family(binomial) link(logit)), vce(cluster id)
-estat ic
-
-// Less complicated combined version
-gsem (infer <- trial2-trial4 cond snsi intx1) (dv <- trial2-trial4 infer cond sisi intx4, family(binomial) link(logit)), vce(cluster id)
-estat ic
