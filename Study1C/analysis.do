@@ -85,9 +85,7 @@ snapshot restore 1
 
 // coding for heuristic responding
 gen half = (amount == 5)
-prtest half, by(cond)
 gen zero = (amount == 0)
-prtest zero, by(cond)
 gen heuristic = (half == 1 | zero == 1)
 
 // frequency of heuristic responding
