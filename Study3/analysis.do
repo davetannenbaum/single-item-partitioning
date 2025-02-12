@@ -5,10 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
-// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
+// note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
-version 16.1
-import delimited "https://shorturl.at/mEJN0", varnames(1) clear
+version 18.5
+import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Study3/data.csv", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -46,7 +46,7 @@ quietly foreach v of varlist choice1 choice2 choice3 choice4 {
 	replace `v' = ltrim(`v')
 }
 
-// Cleaning up open responses
+// cleaning up open responses
 replace choice2 = "mlb" if inlist(choice2,"mlb game")
 replace choice2 = "nfl" if inlist(choice2,"nfl game")
 replace choice2 = "nba" if inlist(choice2,"nba game")
@@ -162,46 +162,68 @@ sum age
 ** Analysis - Preferences
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond, c(mean dv) format(%9.3f)
-logit dv i.trial i.cond, cluster(id) // avg marginal effect
+
+// table of results
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
+
+// logit and avg marginal effect
+logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
+
+// results for each domain
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
 ** Analysis - Judgments
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond, c(mean infer) format(%9.1f)
-regress infer i.trial i.cond, cluster(id) // avg marginal effect
+
+// table of results
+table trial cond, stat(mean infer) nformat(%9.1f) nototals
+
+// regression and avg marginal effect
+regress infer i.trial i.cond, cluster(id)
 margins, dydx(cond)
+
+// results for each domain
 forvalues i = 1/4 {
-	quietly regress infer i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly regress infer i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
 ** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.trial i.cond##i.position, cluster(id) nolog // interaction between partition and listing position
-margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
-margins position, dydx(cond) pwcompare(effects) // difference in avg marginal effects
-regress infer i.trial i.cond##i.position, cluster(id) // interaction between partition and listing position
-margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
+
+// interaction between partition and listing position
+logit dv i.trial i.cond##i.position, cluster(id)
+
+// partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond)
+
+// difference in avg marginal effects
+margins position, dydx(cond) pwcompare(effects)
+
+// interaction between partition and listing position
+regress infer i.trial i.cond##i.position, cluster(id)
+
+// partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond)
 
 ** Correlation between judgments and choices
 ** -----------------------------------------------
-// Grand Correlation
+// grand correlation
 snapshot restore 1
 pwcorr dv infer, sig
 
-// Avg correlation across items, within participants
+// avg correlation across items, within participants
 snapshot restore 1
 statsby corr=r(rho), by(id) clear nodots: corr dv infer
 sum corr
 
-// Avg correlation within items, across participants
+// avg correlation within items, across participants
 snapshot restore 1
 statsby corr=r(rho), by(trial) clear nodots: corr dv infer
 sum corr
@@ -219,26 +241,27 @@ margins order, dydx(cond)
 ** -----------------------------------------------
 snapshot restore 1
 keep if order == 1
-table trial cond, c(mean dv) format(%9.3f)
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
 logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 logit dv i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
+margins position, dydx(cond) pwcompare(effects)
 
 ** Restricting analysis to first block (judgments)
 ** -----------------------------------------------
 snapshot restore 1
 keep if order == 2
-table trial cond, c(mean infer) format(%9.3f)
+table trial cond, stat(mean infer) nformat(%9.1f) nototals
 regress infer i.trial i.cond, cluster(id)
 margins, dydx(cond)
 forvalues i = 1/4 {
-	quietly regress infer i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly regress infer i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 regress infer i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
@@ -346,12 +369,12 @@ xtab id if filter == 1, i(id)
 replace dv = 0 if cond == 1 & filter == 1
 replace dv = 1 if cond == 0 & filter == 1
 
-table trial cond, c(mean dv) format(%9.3f)
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
 logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
 set seed 987654321

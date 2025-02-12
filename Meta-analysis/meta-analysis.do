@@ -4,10 +4,10 @@
 
 ** ---------------------------------------
 // loading combined data
-// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
+// note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
-version 16.1
-import delimited "https://shorturl.at/fiEFH", clear
+version 18.5
+import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Meta-analysis/combined_data.csv", clear
 
 // labeling data
 label var study "study number"
@@ -29,7 +29,7 @@ snapshot save
 
 ** Meta-analysis of Partitioning Effects (Table 6)
 ** ---------------------------------------
-// First collapsing data for each study. We estimate the probability of choosing from the focal category in the unpacked condition (b1 and se1) and in the packed condition (b0 and se0), as well as the average marginal treatment effect (bdiff and sediff).
+// first collapsing data for each study. We estimate the probability of choosing from the focal category in the unpacked condition (b1 and se1) and in the packed condition (b0 and se0), as well as the average marginal effect (bdiff and sediff).
 snapshot restore 1
 gen double b0 = .
 gen double se0 = .
@@ -52,16 +52,15 @@ forvalues i = 1/6 {
 }
 collapse b0 se0 b1 se1 bdiff sediff, by(study studylbl)
 
-// Converting from [0,1] probabilities to percentages (0-100%)
+// converting from [0,1] probabilities to percentages (0-100%)
 foreach var of varlist b0-sediff {
 	replace `var' = `var' * 100
 }
 
-// Table of results
-table studylbl, c(mean b1 mean se1 mean b0 mean se0) format(%9.1f)
-table studylbl, c(mean bdiff mean sediff) format(%9.1f)
+// table of results
+table studylbl, stat(mean b1 se1 b0 se0 bdiff sediff) nformat(%9.1f) nototals
 
-// Calculating combined estimates (and standard errors) for unpacked and packed conditions. We aggregate by weighting each estimate by the inverse variance in the avg treatment effect for that study.
+// calculating combined estimates (and standard errors) for unpacked and packed conditions. We aggregate by weighting each estimate by the inverse variance in the avg treatment effect for that study.
 quietly gen fweight = 1/sediff^2
 quietly sum b1 [iweight = fweight]
 display "combined b1 = " r(mean)
@@ -85,7 +84,7 @@ meta summarize, random
 
 ** Meta-analysis of Positioning Effects (Table 7)
 ** ---------------------------------------
-// First collapsing data for each study. We estimate the average marginal treatment effect when the packed category is the top listing (b0 and se0), the average marginal treatment effect when the packed category is the bottom listing (b1 and se1), and the difference between the two (bdiff and sediff).
+// first collapsing data for each study. We estimate the average marginal treatment effect when the packed category is the top listing (b0 and se0), the average marginal treatment effect when the packed category is the bottom listing (b1 and se1), and the difference between the two (bdiff and sediff).
 snapshot restore 1
 gen double b0 = .
 gen double se0 = .
@@ -108,14 +107,13 @@ forvalues i = 1/6 {
 }
 collapse b0 b1 bdiff se0 se1 sediff, by(study studylbl position)
 
-// Converting from [0,1] probabilities to percentages (0-100%)
+// converting from [0,1] probabilities to percentages (0-100%)
 foreach var of varlist b0-sediff {
 	replace `var' = `var' * 100
 }
 
-// Table of results
-table studylbl, c(mean b1 mean se1 mean b0 mean se0) format(%9.1f)
-table studylbl, c(mean bdiff mean sediff) format(%9.1f)
+// table of results
+table studylbl, stat(mean b1 se1 b0 se0 bdiff sediff) nformat(%9.1f) nototals
 
 // reshaping data
 collapse b? se?, by(study studylbl)

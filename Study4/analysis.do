@@ -5,10 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
-// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
+// note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
-version 16.1
-import delimited "https://shorturl.at/aV034", varnames(1) clear
+version 18.5
+import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Study4/data.csv", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -117,41 +117,64 @@ sum age if age != 520
 ** Analysis - Preferences
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond estimation, c(mean dv) format(%9.3f)
-logit dv i.trial i.cond, cluster(id) nolog
+
+// table of results
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
+
+// logit and avg marginal effect
+logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
+
+// results for each domain
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
 ** Positioning effects - Preferences
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.trial i.cond##i.position, cluster(id) nolog
+
+// interaction between partition and listing position
+logit dv i.trial i.cond##i.position, cluster(id)
+
+// partitioning effects when grouped listing is top vs bottom
 margins position, dydx(cond)
+
+// difference in avg marginal effects
 margins position, dydx(cond) pwcompare(effects)
 
 ** Interaction between timing of inferences and choice
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.trial i.estimation##i.cond, cluster(id) nolog
+
+// interaction between timing and choice
+logit dv i.trial i.estimation##i.cond, cluster(id)
+
+// partitioning effects when inferences are elicited before vs after exposure to partition
 margins estimation, dydx(cond)
+
+// difference in avg marginal effects
 margins estimation, dydx(cond) pwcompare(effects)
 
+// results for each domain
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i' & estimation == 0, cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i' & estimation == 0, robust
+	margins, dydx(cond)
 }
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i' & estimation == 1, cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i' & estimation == 1, robust
+	margins, dydx(cond)
 }
 
 ** Interaction between timing of inferences and judgments
 ** -----------------------------------------------
 snapshot restore 1
+
+// interaction between timing and inferences
 regress infer i.trial i.estimation##i.cond, cluster(id)
+
+// inferences before vs after exposure to partition
 margins estimation, dydx(cond)
 
 ** Mediation (KHB method)
@@ -248,24 +271,24 @@ xtab id if filter == 1, i(id)
 replace dv = 0 if cond == 1 & filter == 1
 replace dv = 1 if cond == 0 & filter == 1
 
-table trial cond estimation, c(mean dv) format(%9.3f)
-logit dv i.trial i.cond, cluster(id) nolog
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
+logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
-logit dv i.trial i.estimation##i.cond, cluster(id) nolog
+logit dv i.trial i.estimation##i.cond, cluster(id)
 margins estimation, dydx(cond)
 margins estimation, dydx(cond) pwcompare(effects)
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i' & estimation == 0, cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i' & estimation == 0, robust
+	margins, dydx(cond)
 }
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i' & estimation == 1, cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i' & estimation == 1, robust
+	margins, dydx(cond)
 }
 
 snapshot restore 1

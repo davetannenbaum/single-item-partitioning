@@ -5,10 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
-// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
+// note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
-version 16.1
-import delimited "https://shorturl.at/flqK3", varnames(1) clear
+version 18.5
+import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Study2/data.csv", varnames(1) clear
 
 // dropping extra row of variable labels
 drop in 1
@@ -88,9 +88,15 @@ prtest dv, by(cond)
 ** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
-logit dv i.cond##i.position, robust // interaction between partition and listing position 
-margins position, dydx(cond) // partitioning effects when grouped listing is top vs bottom
-margins position, dydx(cond) pwcompare(effects) // difference in avg marginal effects
+
+// interaction between partition and listing position 
+logit dv i.cond##i.position, robust
+
+// partitioning effects when grouped listing is top vs bottom
+margins position, dydx(cond)
+
+// difference in avg marginal effects
+margins position, dydx(cond) pwcompare(effects)
 
 ** Robustness Check: recode missing observations to go against hypothesis
 ** -----------------------------------------------

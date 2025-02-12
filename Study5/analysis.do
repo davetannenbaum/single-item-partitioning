@@ -5,10 +5,10 @@
 ** Cleanup
 ** -----------------------------------------------
 // loading raw data
-// note: Below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
+// note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
-version 16.1
-import delimited "https://shorturl.at/irGZ9", varnames(1) clear bindquote(strict)
+version 18.5
+import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Study5/data.csv", varnames(1) clear bindquote(strict)
 
 // dropping extra rows of variable labels
 drop in 1/2
@@ -183,50 +183,73 @@ sum age
 ** Analysis - Preferences
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond, c(mean dv) format(%9.3f)
+
+// table of results
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
+
+// logit and avg marginal effect
 logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
+
+// results for each domain
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
 ** Analysis - Inferences
 ** -----------------------------------------------
 snapshot restore 1
-table trial cond, c(mean infer) format(%9.3f)
+
+// table of results
+table trial cond, stat(mean infer) nformat(%9.1f) nototals
+
+// regression and avg marginal effect
 regress infer i.trial i.cond, cluster(id)
+margins, dydx(cond)
+
+// results for each domain
 forvalues i = 1/4 {
-	quietly regress infer i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly regress infer i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 
 ** Positioning effects
 ** -----------------------------------------------
 snapshot restore 1
+
+// interaction between partition and listing position
 logit dv i.trial i.cond##i.position, cluster(id)
+
+// partitioning effects when grouped listing is top vs bottom
 margins position, dydx(cond)
+
+// difference in avg marginal effects
 margins position, dydx(cond) pwcompare(effects)
+
+// interaction between partition and listing position
 regress infer i.trial i.cond##i.position, cluster(id)
+
+// partitioning effects when grouped listing is top vs bottom
 margins position, dydx(cond)
 
 ** Correlation between inferences and choices
 ** -----------------------------------------------
-// Grand Correlation
+// grand correlation
 snapshot restore 1
 pwcorr dv infer, sig
 
-// Average across-items, within-subjects correlation
+// avg correlation across items, within participants
 snapshot restore 1
 statsby corr=r(rho), by(id) clear nodots: corr dv infer
 sum corr
 
-// Average across-subject, within-items correlation
+// avg correlation within items, across participants
 snapshot restore 1
 statsby corr=r(rho), by(trial) clear nodots: corr dv infer
 sum corr
 
-** Does block order moderate results?
+** Block order effects
 ** -----------------------------------------------
 snapshot restore 1
 logit dv i.trial i.cond##i.order, cluster(id)
@@ -235,28 +258,30 @@ margins order, dydx(cond) pwcompare(effects)
 regress infer i.trial i.cond##i.order, cluster(id)
 margins order, dydx(cond)
 
-** Restricting analysis to first block
+** Restricting analysis to first block (choices)
 ** -----------------------------------------------
 snapshot restore 1
 keep if order == 1
-table trial cond, c(mean dv) format(%9.3f)
+table trial cond, stat(mean dv) nformat(%9.3f) nototals
 logit dv i.trial i.cond, cluster(id)
 margins, dydx(cond)
 forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly logit dv i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 logit dv i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
 margins position, dydx(cond) pwcompare(effects)
 
+** Restricting analysis to first block (judgments)
+** -----------------------------------------------
 snapshot restore 1
 keep if order == 2
-table trial cond, c(mean infer) format(%9.1f)
+table trial cond, stat(mean infer) nformat(%9.1f) nototals
 regress infer i.trial i.cond, cluster(id)
 forvalues i = 1/4 {
-	quietly regress infer i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
+	quietly regress infer i.cond if trial == `i', robust
+	margins, dydx(cond)
 }
 regress infer i.trial i.cond##i.position, cluster(id)
 margins position, dydx(cond)
@@ -283,22 +308,60 @@ estat boot, bc percentile
 
 ** Bootstrapped mediation by block ordering
 ** -----------------------------------------------
+// choices first
 snapshot restore 1
-khb logit dv cond || c.infer if order == 1, summary vce(cluster id) concomitant(i.trial)
-khb logit dv cond || c.infer if order == 2, summary vce(cluster id) concomitant(i.trial)
+set seed 987654321
+keep if order == 1
+capture program drop bootm
+program bootm, rclass
+  khb logit dv cond || c.infer, concomitant(i.trial)
+  return scalar total = el(e(b),1,1)
+  return scalar direct = el(e(b),1,2)
+  return scalar indirect = el(e(b),1,3)
+end
+bootstrap r(total) r(direct) r(indirect), cluster(id) reps(10000) nodots: bootm
+estat boot, bc percentile
+
+// judgments first
+snapshot restore 1
+set seed 987654321
+keep if order == 2
+capture program drop bootm
+program bootm, rclass
+  khb logit dv cond || c.infer, concomitant(i.trial)
+  return scalar total = el(e(b),1,1)
+  return scalar direct = el(e(b),1,2)
+  return scalar indirect = el(e(b),1,3)
+end
+bootstrap r(total) r(direct) r(indirect), cluster(id) reps(10000) nodots: bootm
+estat boot, bc percentile
 
 ** Moderation/Subgroup Analysis
 ** -----------------------------------------------
 snapshot restore 1
+
+// recoding inferences to fall between [0,1], so that inference and choice are on similar scales
 replace infer = infer * .01
 
+// model 1
 regress dv i.trial i.cond##c.nsi, cluster(id)
+
+// model 2
 regress dv i.trial i.cond##c.isi, cluster(id)
+
+// model 3
 regress infer i.trial i.cond##c.nsi, cluster(id)
+
+// model 4
 regress infer i.trial i.cond##c.isi, cluster(id)
+
+// model 5
 regress dv i.trial i.cond c.infer##c.nsi, cluster(id)
+
+// model 6
 regress dv i.trial i.cond c.infer##c.isi, cluster(id)
 
+// same thing, but examining p-values when using logit models for models 1, 2, 5, and 6
 logit dv i.trial i.cond##c.nsi, cluster(id)
 logit dv i.trial i.cond##c.isi, cluster(id)
 regress infer i.trial i.cond##c.nsi, cluster(id)
@@ -335,50 +398,3 @@ twoway ///
 	scheme(s1mono) ///
 	legend(off)
 graph twoway rarea _med_updelta0 _med_lodelta0 _med_rho, bcolor(gs14) || line _med_delta0 _med_rho, lcolor(black) ytitle("ACME") title("ACME({&rho})") xtitle("Sensitivity parameter: {&rho}") legend(off) scheme(sj)
-
-** Robustness check: removing participants who had difficulty registering a preference
-** note: uses the "xtab" package, to install type: ssc install xtab
-** -----------------------------------------------
-snapshot restore 1
-xtab id if filter == 1, i(id)
-replace dv = 0 if cond == 1 & dv == .
-replace dv = 1 if cond == 0 & dv == .
-
-table trial cond, c(mean dv) format(%9.3f)
-logit dv i.trial i.cond, cluster(id)
-margins, dydx(cond)
-forvalues i = 1/4 {
-	quietly logit dv i.cond if trial == `i', cluster(id)
-	margins, dydx(*)
-}
-set seed 987654321
-capture program drop bootm
-program bootm, rclass
-  logit dv i.trial c.infer i.cond
-  predict xb, xb
-  regress xb i.trial i.cond
-  local total = _b[1.cond]
-  regress xb i.trial c.infer i.cond
-  local direct = _b[1.cond]
-  return scalar total = `total'
-  return scalar direct = `direct'
-  return scalar indirect = `total' - `direct'
-  drop xb
-end
-bootstrap r(total) r(direct) r(indirect), cluster(id) reps(10000) nodots: bootm
-estat boot
-
-replace infer = infer * .01
-regress dv i.trial i.cond##c.nsi, cluster(id)
-regress dv i.trial i.cond##c.isi, cluster(id)
-regress infer i.trial i.cond##c.nsi, cluster(id)
-regress infer i.trial i.cond##c.isi, cluster(id)
-regress dv i.trial i.cond c.infer##c.nsi, cluster(id)
-regress dv i.trial i.cond c.infer##c.isi, cluster(id)
-
-logit dv i.trial i.cond##c.nsi, cluster(id)
-logit dv i.trial i.cond##c.isi, cluster(id)
-regress infer i.trial i.cond##c.nsi, cluster(id)
-regress infer i.trial i.cond##c.isi, cluster(id)
-logit dv i.trial i.cond c.infer##c.nsi, cluster(id)
-logit dv i.trial i.cond c.infer##c.isi, cluster(id)
