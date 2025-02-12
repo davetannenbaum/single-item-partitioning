@@ -56,8 +56,8 @@ label val gender genderl
 label var age "participant age (in years)"
 
 // removing crud
-keep participantid cond choice amount gender age
-keep participantid cond choice amount gender age
+keep cond choice amount gender age
+keep cond choice amount gender age
 
 // saving snapshot of data
 snapshot save
