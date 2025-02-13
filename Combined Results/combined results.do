@@ -1,5 +1,5 @@
 ** ===============================================
-** Meta-analysis (Tables 6 and 7)
+** Tables 6 and 7
 ** ===============================================
 
 ** ---------------------------------------
@@ -7,7 +7,8 @@
 // note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 18.5
-import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Meta-analysis/combined_data.csv", clear
+import delimited "~/Dropbox (Maestral)/Work/Partition Dependence/Studies/meta-analysis/combined_data.csv", clear
+// import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Meta-analysis/combined_data.csv", clear
 
 // labeling data
 label var study "study number"
@@ -27,9 +28,9 @@ label val dv dvl
 // saving snapshot of data
 snapshot save
 
-** Meta-analysis of Partitioning Effects (Table 6)
+** Table 6
 ** ---------------------------------------
-// first collapsing data for each study. We estimate the probability of choosing from the focal category in the unpacked condition (b1 and se1) and in the packed condition (b0 and se0), as well as the average marginal effect (bdiff and sediff).
+// first collapsing data for each study. We estimate the probability of choosing from the focal behavior in the unpacked condition (b1 and se1) and in the packed condition (b0 and se0), as well as the average marginal effect (bdiff and sediff).
 snapshot restore 1
 gen double b0 = .
 gen double se0 = .
@@ -37,7 +38,7 @@ gen double b1 = .
 gen double se1 = .
 gen double bdiff = .
 gen double sediff = .
-forvalues i = 1/6 {
+forvalues i = 1/7 {
 	logit dv i.trial i.cond if study == `i', cluster(id)
 	margins cond, post
 	lincom _b[0.cond]
