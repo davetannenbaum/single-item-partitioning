@@ -7,8 +7,7 @@
 // note: below I pull data from GitHub, but you may wish to change the file path to load data from your local working directory
 snapshot erase _all
 version 18.5
-import delimited "~/Dropbox (Maestral)/Work/Partition Dependence/Studies/meta-analysis/combined_data.csv", clear
-// import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Meta-analysis/combined_data.csv", clear
+import delimited "https://raw.githubusercontent.com/davetannenbaum/single-item-partitioning/refs/heads/master/Combined%20Results/combined_data.csv", clear
 
 // labeling data
 label var study "study number"
