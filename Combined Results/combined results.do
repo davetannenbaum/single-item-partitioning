@@ -73,7 +73,7 @@ quietly gen var0 = se0^2
 quietly sum var0 [iweight = fweight]
 display "combined se0 = " sqrt(r(mean))
 
-// fixed-effect meta analysis
+// fixed-effect analysis
 meta set bdiff sediff, studylabel(studylbl) eslabel(Avg Marginal Effect)
 meta summarize, fixed
 display "combined bdiff = " r(theta)
@@ -82,10 +82,12 @@ display "combined sediff = " r(se)
 // checking results when using random-effects
 meta summarize, random
 
-** Meta-analysis of Positioning Effects (Table 7)
+** Positioning Effects (Table 7)
 ** ---------------------------------------
-// first collapsing data for each study. We estimate the average marginal treatment effect when the packed category is the top listing (b0 and se0), the average marginal treatment effect when the packed category is the bottom listing (b1 and se1), and the difference between the two (bdiff and sediff).
+// first removing Study 1C (since we didn't vary packed position for this study), then collapsing data for each study. We estimate the average treatment effect when the packed category is the top listing (b0 and se0), the average treatment effect when the packed category is the bottom listing (b1 and se1), and the difference between the two (bdiff and sediff).
 snapshot restore 1
+drop if study == 3
+replace study = study - 1 if study > 3
 gen double b0 = .
 gen double se0 = .
 gen double b1 = .
@@ -122,7 +124,7 @@ label var position "menu partition position"
 label define positionl1 0 "packed category at top" 1 "packed category at bottom"
 label val position positionl1
 
-// fixed-effect meta analysis
+// fixed-effect analysis
 meta set b se, studylabel(studylbl) eslabel(Avg Marginal Effect)
 meta summarize, subgroup(position) fixed
 display "combined bdiff1 = " r(esgroup)[2,1]
